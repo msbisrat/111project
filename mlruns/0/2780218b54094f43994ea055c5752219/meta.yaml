@@ -1,0 +1,14 @@
+artifact_uri: file:///C:/Users/vivek gupta/Desktop/Projects/Heart_disease_prediction/mlruns/0/2780218b54094f43994ea055c5752219/artifacts
+end_time: 1768155524406
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: 2780218b54094f43994ea055c5752219
+run_name: kindly-gull-928
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1768155524247
+status: 3
+tags: []
+user_id: vivek34561

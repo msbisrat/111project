@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual environments
+.env
+.venv/
+venv/
+
+# Mac files
+.DS_Store
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data folders
+data/raw/
+data/processed/
+
+# Dataset files
+*.csv
+*.data
+*.mod
+*.zip
+*.xlsx
+
+# Trained models
+models/*.pkl
+models/*.joblib
+models/*.h5
+
+# Vector databases
+*.faiss
+*.index
+
+# Environment/API keys
+.env.local
+secrets.toml
+
+# Logs
+*.log
