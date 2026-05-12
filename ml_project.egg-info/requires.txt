@@ -9,5 +9,4 @@ pydantic
 requests
 groq
 fpdf
--e .
 streamlit
