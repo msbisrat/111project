@@ -18,7 +18,6 @@ data/raw/
 data/processed/
 
 # Dataset files
-*.csv
 *.data
 *.mod
 *.zip
