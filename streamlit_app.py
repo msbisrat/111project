@@ -1,10 +1,26 @@
 import streamlit as st
+st.set_page_config(page_title="🪀 Heart Risk & Diet AI", layout="wide")
+
 import requests
+from src.mlproject.risk_adjustment import BRFSSRiskAdjuster
+from src.mlproject.profile_manager  import ProfileManager
+
+"""
+streamlit_app.py
+----------------
+Main UI for the Personalised Heart Disease Risk Chatbot.
+
+Two-stage prediction pipeline:
+  Stage 1 — UCI clinical model via FastAPI  (/predict endpoint in app.py)
+  Stage 2 — BRFSS lifestyle adjustment      (BRFSSRiskAdjuster)
+
+Profile persistence:
+  ProfileManager saves/loads each user's clinical + lifestyle data as JSON.
+  Returning users get their fields pre-filled automatically.
+"""
 
 # ------------------------- Backend URL -------------------------
 API_URL = "http://127.0.0.1:8000"
-
-st.set_page_config(page_title="🪀 Heart Risk & Diet AI", layout="wide")
 
 st.sidebar.header("🔑 Configuration")
 language = st.sidebar.selectbox(

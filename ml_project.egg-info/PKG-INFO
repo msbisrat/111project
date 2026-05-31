@@ -1,13 +1,22 @@
-Metadata-Version: 2.1
-Name: ml-project
+Metadata-Version: 2.4
+Name: ml_project
 Version: 0.0.1
-Summary: UNKNOWN
-Home-page: UNKNOWN
 Author: Vivek
 Author-email: vivekgupta3749@gmail.com
-License: UNKNOWN
-Platform: UNKNOWN
 License-File: LICENSE
-
-UNKNOWN
-
+Requires-Dist: fastapi
+Requires-Dist: uvicorn
+Requires-Dist: gunicorn
+Requires-Dist: numpy
+Requires-Dist: pandas
+Requires-Dist: scikit-learn==1.6.1
+Requires-Dist: python-dotenv
+Requires-Dist: pydantic
+Requires-Dist: requests
+Requires-Dist: groq
+Requires-Dist: fpdf
+Requires-Dist: streamlit
+Dynamic: author
+Dynamic: author-email
+Dynamic: license-file
+Dynamic: requires-dist

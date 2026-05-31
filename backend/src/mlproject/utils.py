@@ -1,7 +1,7 @@
 import os
 import sys
-from src.mlproject.exception import CustomException
-from src.mlproject.logger import logging
+from src import CustomException
+from src import logging
 import pandas as pd
 from dotenv import load_dotenv
 from sklearn.metrics import r2_score
@@ -60,7 +60,7 @@ def save_object(file_path , obj)    :
 
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
-from src.mlproject.exception import CustomException
+from src import CustomException
 import sys
 
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score

@@ -6,12 +6,12 @@ from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.impute import SimpleImputer
-from src.mlproject.exception import CustomException
-from src.mlproject.logger import logging
+from src import CustomException
+from src import logging
 from sklearn.preprocessing import LabelEncoder
 
 import os
-from src.mlproject.utils import save_object
+from src import save_object
 
 @dataclass
 class DataTransformationConfig:

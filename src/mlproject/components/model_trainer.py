@@ -19,9 +19,9 @@ from sklearn.tree import DecisionTreeClassifier
 from xgboost import XGBClassifier
 from catboost import CatBoostClassifier
 
-from src.mlproject.logger import logging
-from src.mlproject.exception import CustomException
-from src.mlproject.utils import save_object, evaluate_model
+from src import logging
+from src import CustomException
+from src import save_object, evaluate_model
 
 @dataclass
 class ModelTrainerConfig:

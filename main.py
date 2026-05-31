@@ -1,10 +1,10 @@
-from src.mlproject.logger import logging
-from src.mlproject.exception import CustomException
+from src import logging
+from src import CustomException
 import sys
-from src.mlproject.components.data_ingestion import DataIngestion
-from src.mlproject.components.data_ingestion import DataIngestionConfig
-from src.mlproject.components.data_transformation import DataTransformationConfig , DataTransformation 
-from src.mlproject.components.model_trainer import ModelTrainerConfig , ModelTrainer 
+from src import DataIngestion
+from src import DataIngestionConfig
+from src import DataTransformationConfig , DataTransformation
+from src import ModelTrainerConfig , ModelTrainer
 
 if __name__ =="__main__":
     logging.info("the execution has started")
