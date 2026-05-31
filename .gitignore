@@ -18,10 +18,6 @@ data/raw/
 data/processed/
 
 # Dataset files
-*.data
-*.mod
-*.zip
-*.xlsx
 
 # Trained models
 models/*.pkl
