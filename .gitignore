@@ -39,3 +39,6 @@ secrets.toml
 
 # Logs
 *.log
+
+# User profiles
+profiles/

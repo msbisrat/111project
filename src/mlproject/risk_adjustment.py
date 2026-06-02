@@ -472,7 +472,7 @@ class BRFSSRiskAdjuster:
 
 # ── Smoke test ─────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    adjuster = BRFSSRiskAdjuster("data/brfss_cleaned.csv")
+    adjuster = BRFSSRiskAdjuster("/111project/brfss_survey_data_processed.csv")
 
     # Simulate weights without loading CSV
     adjuster.weights = {
