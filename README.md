@@ -174,8 +174,9 @@ This is for local demo purposes only and does not include secure login, encrypti
 
 ---
 
-## 🏗️ Architecture
 
+
+## 🏗️ Architecture
 
 ```text
 User Input through Streamlit
@@ -191,19 +192,10 @@ Heart Disease Risk Prediction
 Groq AI Layer
         ↓
 Diet Plan | Risk Report | Lifestyle Advice | Doctor Note | Chatbot
-
-MLflow runs alongside the pipeline to track metrics, parameters, and models.
-
----
-
+```
 
 ---
 
-### tech stack
-
-Original tech stack includes MySQL, MLflow, LangChain, XGBoost, CatBoost, PDF export, Heroku. Only keep them if your current code actually uses them. For your current Option B version, safer:
-
-```markdown
 ## 🛠️ Tech Stack
 
 | Layer | Technology |
@@ -217,6 +209,7 @@ Original tech stack includes MySQL, MLflow, LangChain, XGBoost, CatBoost, PDF ex
 | GenAI | Groq API |
 | Config Management | python-dotenv |
 | Local Profile Storage | JSON |
+
 ---
 
 ## 🚀 Quick Start
@@ -227,7 +220,6 @@ Original tech stack includes MySQL, MLflow, LangChain, XGBoost, CatBoost, PDF ex
 git clone <your-repo-link>
 cd 111project-main
 ```
-
 ### 2. Create and activate a virtual environment
 
 ```bash
