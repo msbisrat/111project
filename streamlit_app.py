@@ -1,669 +1,542 @@
-"""
-streamlit_app.py
-----------------
-Main UI for the Personalised Heart Disease Risk Chatbot.
-
-Two-stage prediction pipeline:
-  Stage 1 — UCI clinical model via FastAPI  (/predict endpoint in app.py)
-  Stage 2 — BRFSS lifestyle adjustment      (BRFSSRiskAdjuster)
-
-Profile persistence:
-  ProfileManager saves/loads each user's clinical + lifestyle data as JSON.
-  Returning users get their fields pre-filled automatically.
-"""
-
-import streamlit as st
-st.set_page_config(page_title="🫀 Heart Risk AI", layout="wide")  # must be first
+import json
+from pathlib import Path
 
 import requests
-import threading
-import time
-import uvicorn
-import os
-from src.mlproject.risk_adjustment import BRFSSRiskAdjuster
-from src.mlproject.profile_manager  import ProfileManager
+import streamlit as st
 
-# ── Config ────────────────────────────────────────────────────────────────────
+
 API_URL = "http://127.0.0.1:8000"
+PROFILE_FILE = Path("saved_profiles.json")
 
-# ── Auto-start FastAPI backend in a background thread ─────────────────────────
-def start_backend():
-    """Launch the FastAPI app on port 8000 in a daemon thread."""
-    config = uvicorn.Config("app:app", host="127.0.0.1", port=8000, log_level="error")
-    server = uvicorn.Server(config)
-    server.run()
+st.set_page_config(page_title="BRFSS Heart Risk & Diet AI", layout="wide")
 
-@st.cache_resource
-def launch_backend():
-    """
-    Start the backend once per Streamlit session.
-    cache_resource ensures this only runs once even across reruns.
-    """
-    thread = threading.Thread(target=start_backend, daemon=True)
-    thread.start()
-    # Give the server a moment to boot before Streamlit starts making requests
-    time.sleep(2)
-    return thread
-
-launch_backend()
-
-# ── Load shared resources once (cached across reruns) ─────────────────────────
-@st.cache_resource
-def load_adjuster():
-    adj = BRFSSRiskAdjuster(os.path.join(os.path.dirname(os.path.abspath(__file__)), "brfss_survey_data_processed.csv"))
-    adj.fit()
-    return adj
-
-@st.cache_resource
-def load_pm():
-    return ProfileManager(profiles_dir=os.path.join(os.path.dirname(os.path.abspath(__file__)), "profiles"))
-
-adjuster = load_adjuster()
-pm       = load_pm()
-
-# ── Session state defaults ────────────────────────────────────────────────────
-_defaults = {
-    "predicted":       False,
-    "prediction":      None,
-    "base_prob":       None,
-    "adjusted_result": None,
-    "diet_plan_text":  None,
-    "risk_report":     None,
-    "lifestyle_advice":None,
-    "doctor_note":     None,
-    "chat_history":    [],
-    "loaded_profile":  None,
-    "username":        "",
-}
-for k, v in _defaults.items():
-    if k not in st.session_state:
-        st.session_state[k] = v
-
-# ── Sidebar ───────────────────────────────────────────────────────────────────
-st.sidebar.header("⚙️ Configuration")
+st.sidebar.header("Configuration")
 language = st.sidebar.selectbox(
-    "🌐 Output language",
-    ["English", "Hindi", "Spanish", "Tamil", "Bengali"]
+    "Select Output Language",
+    ["English", "Hindi", "Spanish", "Tamil", "Bengali"],
 )
 
-st.sidebar.markdown("---")
-st.sidebar.subheader("👤 User Profile")
+st.title("BRFSS Heart Disease Risk Predictor & Diet Assistant")
+st.caption("Option B: prediction uses BRFSS features only, not the old UCI clinical fields.")
 
-username_input = st.sidebar.text_input(
-    "Username",
-    value=st.session_state["username"],
-    placeholder="e.g. john_doe"
-).strip().lower()
 
-# Detect username change → clear loaded profile
-if username_input != st.session_state["username"]:
-    st.session_state["username"]       = username_input
-    st.session_state["loaded_profile"] = None
+def load_profiles():
+    if PROFILE_FILE.exists():
+        with open(PROFILE_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
 
-username = st.session_state["username"]
 
-if username:
-    if pm.profile_exists(username):
-        st.sidebar.success(f"✅ Profile found for **{username}**")
-        if st.sidebar.button("📂 Load saved profile"):
-            st.session_state["loaded_profile"] = pm.load_profile(username)
-            st.rerun()
-    else:
-        st.sidebar.info("🆕 New user — profile will be created on first prediction.")
+def save_profiles(profiles):
+    with open(PROFILE_FILE, "w", encoding="utf-8") as f:
+        json.dump(profiles, f, indent=2)
 
-# Convenience shortcuts for pre-filling
-lp   = st.session_state["loaded_profile"] or {}
-lp_c = lp.get("clinical",  {})
-lp_l = lp.get("lifestyle", {})
 
-if lp:
-    st.sidebar.success("✅ Profile loaded — fields pre-filled.")
+def optional_number(label, min_value=None, max_value=None, step=1.0, key=None, default=None):
+    if default is None:
+        default = ""
+    value = st.text_input(label, value=str(default) if default != "" else "", placeholder="Leave blank if unknown", key=key)
 
-# ── Page title ────────────────────────────────────────────────────────────────
-st.title("🫀 Personalised Heart Disease Risk Predictor")
-st.caption("Fill in your clinical details and lifestyle information, then click **Predict**.")
-
-# ── Helper widgets ────────────────────────────────────────────────────────────
-def num_input(label, min_val=None, max_val=None, step=1.0, saved=None):
-    """Text input that accepts numbers; returns int/float or None."""
-    default_str = str(saved) if saved is not None else ""
-    raw = st.text_input(label, value=default_str, placeholder="Leave blank if unknown")
-    if raw.strip() == "":
+    if value.strip() == "":
         return None
+
     try:
-        n = float(raw)
-        if min_val is not None and n < min_val:
-            st.warning(f"{label}: minimum is {min_val}"); return None
-        if max_val is not None and n > max_val:
-            st.warning(f"{label}: maximum is {max_val}"); return None
-        return int(n) if step == 1 else n
+        number = float(value)
+
+        if min_value is not None and number < min_value:
+            st.warning(f"{label} should be at least {min_value}.")
+            return None
+
+        if max_value is not None and number > max_value:
+            st.warning(f"{label} should be at most {max_value}.")
+            return None
+
+        if step == 1:
+            return int(number)
+
+        return number
+
     except ValueError:
-        st.warning(f"{label}: please enter a valid number"); return None
-
-def sel_input(label, options, saved=None):
-    """Selectbox with an 'I don't know' guard. Returns selected value or None."""
-    all_opts = ["I don't know"] + list(options)
-    idx = 0
-    if saved is not None and saved in options:
-        idx = all_opts.index(saved)
-    val = st.selectbox(label, all_opts, index=idx)
-    return None if val == "I don't know" else val
+        st.warning(f"Please enter a valid number for {label}.")
+        return None
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# TABS
-# ══════════════════════════════════════════════════════════════════════════════
-tab_clinical, tab_lifestyle, tab_diet, tab_report, tab_doctor, tab_history = st.tabs([
-    "📋 Clinical Profile",
-    "🏃 Lifestyle & BRFSS",
-    "🥗 Diet Plan",
-    "📊 Risk Report",
-    "📄 Doctor's Note",
-    "🕓 History",
-])
+def optional_select(label, options, key=None, default=None):
+    labels = ["I don't know"] + list(options.keys())
+
+    default_label = "I don't know"
+    if default is not None:
+        for label_text, code in options.items():
+            if code == default:
+                default_label = label_text
+                break
+
+    index = labels.index(default_label) if default_label in labels else 0
+    value = st.selectbox(label, labels, index=index, key=key)
+
+    if value == "I don't know":
+        return None
+
+    return options[value]
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# TAB 1 — Clinical Profile
-# ══════════════════════════════════════════════════════════════════════════════
-with tab_clinical:
-    st.subheader("📋 Clinical Health Profile")
-    st.caption("Leave any field blank if unknown.")
+def optional_text_select(label, options, key=None, default=None):
+    labels = ["I don't know"] + options
+    index = labels.index(default) if default in labels else 0
+    value = st.selectbox(label, labels, index=index, key=key)
 
-    with st.expander("🏠 Basic Information", expanded=True):
-        c1, c2 = st.columns(2)
-        with c1:
-            age       = num_input("🎂 Age",        0,   120, saved=lp_c.get("age"))
-            sex       = sel_input("♂️ Biological Sex", ["Male","Female"], saved=lp_c.get("sex"))
-            height_cm = num_input("📏 Height (cm)", 80,  250, step=0.1, saved=lp_c.get("height_cm"))
-            weight_kg = num_input("⚖️ Weight (kg)", 20,  300, step=0.1, saved=lp_c.get("weight_kg"))
-        with c2:
-            job    = st.text_input("💼 Occupation (optional)",     value=lp_c.get("job")    or "")
-            gender = st.text_input("🪪 Gender identity (optional)", value=lp_c.get("gender") or "")
+    if value == "I don't know":
+        return None
 
-    with st.expander("💓 Heart & Medical Information", expanded=True):
-        c1, c2 = st.columns(2)
-        with c1:
-            trestbps = num_input("🩺 Resting Blood Pressure (mmHg)", 60,  250, saved=lp_c.get("trestbps"))
-            chol     = num_input("🧪 Cholesterol (mg/dL)",           50,  600, saved=lp_c.get("chol"))
-            thalach  = num_input("❤️ Max Heart Rate Achieved",        40,  250, saved=lp_c.get("thalach"))
-            oldpeak  = num_input("📉 ST Depression",                  0,   10,  step=0.1, saved=lp_c.get("oldpeak"))
-        with c2:
-            cp      = sel_input("💓 Chest Pain Type",
-                        ["Typical Angina","Atypical Angina","Non-anginal","Asymptomatic"],
-                        saved=lp_c.get("cp"))
-            exang   = sel_input("🏃 Chest pain during exercise?",  ["No","Yes"],  saved=lp_c.get("exang"))
-            fbs     = sel_input("🍬 Fasting blood sugar >120 mg/dL?", ["No","Yes"], saved=lp_c.get("fbs"))
-            restecg = sel_input("📈 ECG Results",
-                        ["Normal","ST-T Abnormality","Left Ventricular Hypertrophy"],
-                        saved=lp_c.get("restecg"))
-            slope   = sel_input("📊 Slope of ST Segment",
-                        ["Upsloping","Flat","Downsloping"], saved=lp_c.get("slope"))
-            ca      = sel_input("🦠 Major Vessels Coloured (0–3)", [0,1,2,3], saved=lp_c.get("ca"))
-            thal    = sel_input("🦬 Thalassemia",
-                        ["Normal","Fixed Defect","Reversible Defect"], saved=lp_c.get("thal"))
+    return value
 
-    with st.expander("⌚ Wearable Data (optional)", expanded=False):
-        c1, c2 = st.columns(2)
-        with c1:
-            avg_heart_rate     = num_input("Average heart rate (bpm)",  30, 220, step=0.1, saved=lp_c.get("avg_heart_rate"))
-            resting_heart_rate = num_input("Resting heart rate (bpm)",  30, 180, step=0.1, saved=lp_c.get("resting_heart_rate"))
-        with c2:
-            sleep_hours      = num_input("Sleep (hours/night)",          0,  24, step=0.1, saved=lp_c.get("sleep_hours"))
-            respiratory_rate = num_input("Respiratory rate (breaths/min)", 5, 40, step=0.1, saved=lp_c.get("respiratory_rate"))
 
-    with st.expander("🥗 Nutrition (optional)", expanded=False):
-        c1, c2 = st.columns(2)
-        with c1:
-            calories_per_day = num_input("Calories/day",  0, 10000, saved=lp_c.get("calories_per_day"))
-            protein_g        = num_input("Protein (g/day)", 0, 500, step=0.1, saved=lp_c.get("protein_g"))
-            carbs_g          = num_input("Carbs (g/day)",   0, 1000, step=0.1, saved=lp_c.get("carbs_g"))
-        with c2:
-            fat_g        = num_input("Fat (g/day)",       0, 500, step=0.1, saved=lp_c.get("fat_g"))
-            water_liters = num_input("Water (litres/day)", 0,  20, step=0.1, saved=lp_c.get("water_liters"))
+def brfss_height_code(feet, inches):
+    if feet is None or inches is None:
+        return None
+    return int(feet * 100 + inches)
 
-    with st.expander("🗣️ Symptoms (optional)", expanded=False):
+
+SEX_OPTIONS = {"Male": 1.0, "Female": 2.0}
+
+AGE_OPTIONS = {
+    "18-24": 1.0, "25-29": 2.0, "30-34": 3.0, "35-39": 4.0,
+    "40-44": 5.0, "45-49": 6.0, "50-54": 7.0, "55-59": 8.0,
+    "60-64": 9.0, "65-69": 10.0, "70-74": 11.0, "75-79": 12.0,
+    "80+": 13.0,
+}
+
+EDUCATION_OPTIONS = {
+    "Never attended school / kindergarten only": 1.0,
+    "Grades 1-8": 2.0,
+    "Grades 9-11": 3.0,
+    "High school graduate / GED": 4.0,
+    "Some college or technical school": 5.0,
+    "College graduate": 6.0,
+    "Refused / unknown": 9.0,
+}
+
+INCOME_OPTIONS = {
+    "Less than $10,000": 1.0,
+    "$10,000 to < $15,000": 2.0,
+    "$15,000 to < $20,000": 3.0,
+    "$20,000 to < $25,000": 4.0,
+    "$25,000 to < $35,000": 5.0,
+    "$35,000 to < $50,000": 6.0,
+    "$50,000 to < $75,000": 7.0,
+    "$75,000 to < $100,000": 8.0,
+    "$100,000 to < $150,000": 9.0,
+    "$150,000 to < $200,000": 10.0,
+    "$200,000 or more": 11.0,
+    "Don't know": 77.0,
+    "Refused": 99.0,
+}
+
+EMPLOYMENT_OPTIONS = {
+    "Employed for wages": 1.0,
+    "Self-employed": 2.0,
+    "Out of work for 1 year or more": 3.0,
+    "Out of work for less than 1 year": 4.0,
+    "Homemaker": 5.0,
+    "Student": 6.0,
+    "Retired": 7.0,
+    "Unable to work": 8.0,
+    "Refused": 9.0,
+}
+
+MARITAL_OPTIONS = {
+    "Married": 1.0,
+    "Divorced": 2.0,
+    "Widowed": 3.0,
+    "Separated": 4.0,
+    "Never married": 5.0,
+    "Unmarried couple": 6.0,
+    "Refused": 9.0,
+}
+
+HOME_OPTIONS = {
+    "Own": 1.0,
+    "Rent": 2.0,
+    "Other arrangement": 3.0,
+    "Don't know": 7.0,
+    "Refused": 9.0,
+}
+
+GENERAL_HEALTH_OPTIONS = {
+    "Excellent": 1.0,
+    "Very good": 2.0,
+    "Good": 3.0,
+    "Fair": 4.0,
+    "Poor": 5.0,
+    "Don't know": 7.0,
+    "Refused": 9.0,
+}
+
+YES_NO_CODE_OPTIONS = {
+    "Yes": 1.0,
+    "No": 2.0,
+    "Don't know": 7.0,
+    "Refused": 9.0,
+}
+
+LAST_CHECKUP_OPTIONS = {
+    "Within past year": 1.0,
+    "Within past 2 years": 2.0,
+    "Within past 5 years": 3.0,
+    "5 or more years ago": 4.0,
+    "Don't know": 7.0,
+    "Never": 8.0,
+    "Refused": 9.0,
+}
+
+SMOKER_STATUS_OPTIONS = {
+    "Current smoker - every day": 1.0,
+    "Current smoker - some days": 2.0,
+    "Former smoker": 3.0,
+    "Never smoked": 4.0,
+    "Don't know / refused": 9.0,
+}
+
+ECIG_OPTIONS = {
+    "Use every day": 1.0,
+    "Use some days": 2.0,
+    "Not at all": 3.0,
+    "Never used": 4.0,
+    "Don't know": 7.0,
+    "Refused": 9.0,
+}
+
+SMOKELESS_OPTIONS = {
+    "Use every day": 1.0,
+    "Use some days": 2.0,
+    "Not at all": 3.0,
+    "Don't know": 7.0,
+    "Refused": 9.0,
+}
+
+YES_NO_TEXT_OPTIONS = ["Yes", "No"]
+
+DIABETES_OPTIONS = [
+    "Yes",
+    "No",
+    "No, pre-diabetes or borderline diabetes",
+    "Yes, only during pregnancy",
+]
+
+
+for key in ["predicted", "prediction", "diet_plan_text", "risk_report", "lifestyle", "doctor_note", "chat_history", "profile"]:
+    if key not in st.session_state:
+        if key == "predicted":
+            st.session_state[key] = False
+        elif key == "chat_history":
+            st.session_state[key] = []
+        else:
+            st.session_state[key] = None
+
+
+profile_tab, diet_tab, report_tab, lifestyle_tab, doctor_tab = st.tabs(
+    ["Profile", "Diet Plan", "Risk Report", "Lifestyle", "Doctor's Note"]
+)
+
+
+with profile_tab:
+    st.subheader("Patient Health Profile")
+
+    profiles = load_profiles()
+
+    col_a, col_b, col_c = st.columns([2, 1, 1])
+    with col_a:
+        username = st.text_input("Username for saving/loading profile", placeholder="Example: sarah")
+    with col_b:
+        load_clicked = st.button("Load Profile")
+    with col_c:
+        save_clicked = st.button("Save Profile")
+
+    loaded = {}
+    if load_clicked and username:
+        loaded = profiles.get(username, {})
+        if loaded:
+            st.session_state["loaded_profile"] = loaded
+            st.success(f"Loaded profile for {username}")
+        else:
+            st.warning("No saved profile found for this username.")
+
+    loaded = st.session_state.get("loaded_profile", {})
+
+    st.markdown("### BRFSS Prediction Fields")
+    st.caption("These fields are used directly by the BRFSS-only model.")
+
+    with st.expander("Demographics", expanded=True):
+        col1, col2 = st.columns(2)
+        with col1:
+            Sex = optional_select("Biological Sex", SEX_OPTIONS, key="Sex", default=loaded.get("Sex"))
+            AgeCategory = optional_select("Age Category", AGE_OPTIONS, key="AgeCategory", default=loaded.get("AgeCategory"))
+            Education = optional_select("Education", EDUCATION_OPTIONS, key="Education", default=loaded.get("Education"))
+            Income = optional_select("Income", INCOME_OPTIONS, key="Income", default=loaded.get("Income"))
+
+        with col2:
+            EmploymentStatus = optional_select("Employment Status", EMPLOYMENT_OPTIONS, key="EmploymentStatus", default=loaded.get("EmploymentStatus"))
+            MaritalStatus = optional_select("Marital Status", MARITAL_OPTIONS, key="MaritalStatus", default=loaded.get("MaritalStatus"))
+            HomeOwnership = optional_select("Home Ownership", HOME_OPTIONS, key="HomeOwnership", default=loaded.get("HomeOwnership"))
+
+    with st.expander("General Health and Body Measures", expanded=True):
+        col1, col2 = st.columns(2)
+        with col1:
+            GeneralHealth = optional_select("General Health", GENERAL_HEALTH_OPTIONS, key="GeneralHealth", default=loaded.get("GeneralHealth"))
+            GoodOrBetterHealth = optional_select("Would you say your health is good or better?", YES_NO_CODE_OPTIONS, key="GoodOrBetterHealth", default=loaded.get("GoodOrBetterHealth"))
+            LastCheckup = optional_select("Last Routine Checkup", LAST_CHECKUP_OPTIONS, key="LastCheckup", default=loaded.get("LastCheckup"))
+
+        with col2:
+            height_feet = optional_number("Height feet, example 5", 3, 8, key="height_feet", default=loaded.get("height_feet", ""))
+            height_inches = optional_number("Height inches, example 4", 0, 11, key="height_inches", default=loaded.get("height_inches", ""))
+            Height = brfss_height_code(height_feet, height_inches)
+            Weight = optional_number("Weight in pounds", 50, 700, key="Weight", default=loaded.get("Weight", ""))
+
+    with st.expander("Health Behaviors and Conditions", expanded=True):
+        col1, col2 = st.columns(2)
+        with col1:
+            Smoked100Cigarettes = optional_text_select("Smoked at least 100 cigarettes in life?", YES_NO_TEXT_OPTIONS, key="Smoked100Cigarettes", default=loaded.get("Smoked100Cigarettes"))
+            SmokerStatus = optional_select("Smoker Status", SMOKER_STATUS_OPTIONS, key="SmokerStatus", default=loaded.get("SmokerStatus"))
+            ECigaretteUsage = optional_select("E-cigarette Usage", ECIG_OPTIONS, key="ECigaretteUsage", default=loaded.get("ECigaretteUsage"))
+            SmokelessTobaccoUse = optional_select("Smokeless Tobacco Use", SMOKELESS_OPTIONS, key="SmokelessTobaccoUse", default=loaded.get("SmokelessTobaccoUse"))
+            AlcoholDays = optional_number("Alcohol days code. 888 = no drinks, 101-107 = days/week, 201-230 = days/month", 0, 999, key="AlcoholDays", default=loaded.get("AlcoholDays", ""))
+            PhysicalActivities = optional_select("Physical Activities in past month?", YES_NO_CODE_OPTIONS, key="PhysicalActivities", default=loaded.get("PhysicalActivities"))
+
+        with col2:
+            HadDiabetes = optional_text_select("Had Diabetes?", DIABETES_OPTIONS, key="HadDiabetes", default=loaded.get("HadDiabetes"))
+            HadKidneyDisease = optional_text_select("Had Kidney Disease?", YES_NO_TEXT_OPTIONS, key="HadKidneyDisease", default=loaded.get("HadKidneyDisease"))
+            HadStroke = optional_text_select("Had Stroke?", YES_NO_TEXT_OPTIONS, key="HadStroke", default=loaded.get("HadStroke"))
+            HadCOPD = optional_text_select("Had COPD?", YES_NO_TEXT_OPTIONS, key="HadCOPD", default=loaded.get("HadCOPD"))
+            HadDepressiveDisorder = optional_text_select("Had Depressive Disorder?", YES_NO_TEXT_OPTIONS, key="HadDepressiveDisorder", default=loaded.get("HadDepressiveDisorder"))
+            HadArthritis = optional_text_select("Had Arthritis?", YES_NO_TEXT_OPTIONS, key="HadArthritis", default=loaded.get("HadArthritis"))
+
+    st.markdown("### Extra Context for AI Recommendations Only")
+    st.caption("These fields are not used directly by the BRFSS ML prediction.")
+
+    with st.expander("Wearable, Nutrition, and Symptoms", expanded=False):
+        col1, col2 = st.columns(2)
+        with col1:
+            gender = st.text_input("Gender optional", value=loaded.get("gender", "") or "", placeholder="Leave blank if unknown")
+            job = st.text_input("Job optional", value=loaded.get("job", "") or "", placeholder="Example: student, office worker")
+            height_cm = optional_number("Height cm optional", 80, 250, step=0.1, key="height_cm", default=loaded.get("height_cm", ""))
+            weight_kg = optional_number("Weight kg optional", 20, 300, step=0.1, key="weight_kg", default=loaded.get("weight_kg", ""))
+            avg_heart_rate = optional_number("Average heart rate bpm", 30, 220, step=0.1, key="avg_heart_rate", default=loaded.get("avg_heart_rate", ""))
+            resting_heart_rate = optional_number("Resting heart rate bpm", 30, 180, step=0.1, key="resting_heart_rate", default=loaded.get("resting_heart_rate", ""))
+
+        with col2:
+            sleep_hours = optional_number("Sleeping time hours per night", 0, 24, step=0.1, key="sleep_hours", default=loaded.get("sleep_hours", ""))
+            respiratory_rate = optional_number("Respiratory rate breaths per minute", 5, 40, step=0.1, key="respiratory_rate", default=loaded.get("respiratory_rate", ""))
+            calories_per_day = optional_number("Calories per day", 0, 10000, step=0.1, key="calories_per_day", default=loaded.get("calories_per_day", ""))
+            protein_g = optional_number("Protein grams per day", 0, 500, step=0.1, key="protein_g", default=loaded.get("protein_g", ""))
+            carbs_g = optional_number("Carbs grams per day", 0, 1000, step=0.1, key="carbs_g", default=loaded.get("carbs_g", ""))
+            fat_g = optional_number("Fat grams per day", 0, 500, step=0.1, key="fat_g", default=loaded.get("fat_g", ""))
+            water_liters = optional_number("Water liters per day", 0, 20, step=0.1, key="water_liters", default=loaded.get("water_liters", ""))
+
         symptoms = st.text_area(
-            "Describe any symptoms or concerns",
-            value=lp_c.get("symptoms") or "",
-            placeholder="e.g. chest tightness, fatigue, shortness of breath..."
+            "Describe symptoms or concerns optional",
+            value=loaded.get("symptoms", "") or "",
+            placeholder="Example: chest tightness, fatigue, shortness of breath, poor sleep..."
         )
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-# TAB 2 — Lifestyle & BRFSS
-# ══════════════════════════════════════════════════════════════════════════════
-with tab_lifestyle:
-    st.subheader("🏃 Lifestyle & Health Background")
-    st.caption("Based on CDC BRFSS — these personalise your risk score.")
-
-    with st.expander("🚬 Tobacco Use", expanded=True):
-        c1, c2 = st.columns(2)
-        with c1:
-            smoked_100    = sel_input("Smoked 100+ cigarettes in your lifetime?",
-                              ["Yes","No"], saved=lp_l.get("smoked_100_cigarettes_label"))
-            smoker_status = sel_input("Do you currently smoke?",
-                              ["Every day","Some days","Not at all"],
-                              saved=lp_l.get("smoker_status_label"))
-        with c2:
-            ecig_usage = sel_input("Do you currently use e-cigarettes?",
-                           ["Every day","Some days","Not at all","Never used e-cigarettes"],
-                           saved=lp_l.get("ecig_usage_label"))
-            smokeless  = sel_input("Do you use smokeless tobacco?",
-                           ["Every day","Some days","Not at all"],
-                           saved=lp_l.get("smokeless_label"))
-
-    with st.expander("🍺 Alcohol Use", expanded=True):
-        c1, c2 = st.columns(2)
-        with c1:
-            alcohol_drinker = sel_input("Do you drink alcoholic beverages?",
-                                ["Yes","No"], saved=lp_l.get("alcohol_drinker_label"))
-        with c2:
-            alcohol_days_per_week = num_input("Alcohol drinking days per week (0–7)", 0, 7,
-                                              saved=lp_l.get("alcohol_days_per_week_display"))
-
-    with st.expander("🏋️ Physical Activity", expanded=True):
-        physical_activities = sel_input(
-            "In the past 30 days, did you do any physical activity outside your regular job?",
-            ["Yes","No"], saved=lp_l.get("physical_activities_label")
-        )
-
-    with st.expander("🏥 Health Background", expanded=True):
-        c1, c2 = st.columns(2)
-        with c1:
-            general_health = sel_input("How would you rate your general health?",
-                               ["Excellent","Very Good","Good","Fair","Poor"],
-                               saved=lp_l.get("general_health_label"))
-            had_diabetes   = sel_input("Have you been told you have diabetes?",
-                               ["Yes","Yes (pregnancy only)","No","Pre-diabetes / borderline"],
-                               saved=lp_l.get("had_diabetes_label"))
-            had_stroke     = sel_input("Have you ever had a stroke?",
-                               ["Yes","No"], saved=lp_l.get("had_stroke_label"))
-            had_copd       = sel_input("Have you been told you have COPD or emphysema?",
-                               ["Yes","No"], saved=lp_l.get("had_copd_label"))
-        with c2:
-            had_angina     = sel_input("Have you been told you have angina or coronary heart disease?",
-                               ["Yes","No"], saved=lp_l.get("had_angina_label"))
-            had_kidney     = sel_input("Have you been told you have kidney disease?",
-                               ["Yes","No"], saved=lp_l.get("had_kidney_label"))
-            had_depression = sel_input("Have you been told you have a depressive disorder?",
-                               ["Yes","No"], saved=lp_l.get("had_depression_label"))
-            had_arthritis  = sel_input("Have you been told you have arthritis?",
-                               ["Yes","No"], saved=lp_l.get("had_arthritis_label"))
-
-    with st.expander("👤 Demographics", expanded=True):
-        c1, c2 = st.columns(2)
-        with c1:
-            education = sel_input("Highest level of education",
-                          ["Never attended school",
-                           "Elementary (grades 1–8)",
-                           "Some high school (grades 9–11)",
-                           "High school graduate / GED",
-                           "Some college or technical school",
-                           "College graduate"],
-                          saved=lp_l.get("education_label"))
-            income    = sel_input("Annual household income",
-                          ["Less than $10,000","$10,000–$15,000","$15,000–$20,000",
-                           "$20,000–$25,000","$25,000–$35,000","$35,000–$50,000",
-                           "$50,000–$75,000","$75,000–$100,000","$100,000–$150,000",
-                           "$150,000–$200,000","$200,000 or more"],
-                          saved=lp_l.get("income_label"))
-        with c2:
-            employment = sel_input("Employment status",
-                           ["Employed for wages","Self-employed","Out of work (1+ year)",
-                            "Out of work (<1 year)","Homemaker","Student",
-                            "Retired","Unable to work"],
-                           saved=lp_l.get("employment_label"))
-            home_ownership = sel_input("Home ownership",
-                               ["Own","Rent","Other arrangement"],
-                               saved=lp_l.get("home_ownership_label"))
-            marital_status = sel_input("Marital status",
-                               ["Married","Divorced","Widowed","Separated",
-                                "Never married","Member of unmarried couple"],
-                               saved=lp_l.get("marital_status_label"))
-
-    # ── Encode to BRFSS numeric codes ─────────────────────────────────────────
-    SMOKER_MAP   = {"Every day":1,"Some days":2,"Not at all":3}
-    ECIG_MAP     = {"Every day":1,"Some days":2,"Not at all":3,"Never used e-cigarettes":4}
-    HEALTH_MAP   = {"Excellent":1,"Very Good":2,"Good":3,"Fair":4,"Poor":5}
-    DIABETES_MAP = {"Yes":1,"Yes (pregnancy only)":2,"No":3,"Pre-diabetes / borderline":4}
-    YESNO_MAP    = {"Yes":1,"No":2}
-    ACTIVITY_MAP = {"Yes":1,"No":2}
-    EDU_MAP = {
-        "Never attended school":1,"Elementary (grades 1–8)":2,
-        "Some high school (grades 9–11)":3,"High school graduate / GED":4,
-        "Some college or technical school":5,"College graduate":6,
-    }
-    INCOME_MAP = {
-        "Less than $10,000":1,"$10,000–$15,000":2,"$15,000–$20,000":3,
-        "$20,000–$25,000":4,"$25,000–$35,000":5,"$35,000–$50,000":6,
-        "$50,000–$75,000":7,"$75,000–$100,000":8,"$100,000–$150,000":9,
-        "$150,000–$200,000":10,"$200,000 or more":11,
-    }
-    EMPLOY_MAP = {
-        "Employed for wages":1,"Self-employed":2,"Out of work (1+ year)":3,
-        "Out of work (<1 year)":4,"Homemaker":5,"Student":6,"Retired":7,"Unable to work":8,
-    }
-    HOME_MAP    = {"Own":1,"Rent":2,"Other arrangement":3}
-    MARITAL_MAP = {
-        "Married":1,"Divorced":2,"Widowed":3,
-        "Separated":4,"Never married":5,"Member of unmarried couple":6,
+    profile = {
+        "username": username or None,
+        "Sex": Sex,
+        "AgeCategory": AgeCategory,
+        "Education": Education,
+        "Income": Income,
+        "EmploymentStatus": EmploymentStatus,
+        "MaritalStatus": MaritalStatus,
+        "HomeOwnership": HomeOwnership,
+        "GeneralHealth": GeneralHealth,
+        "GoodOrBetterHealth": GoodOrBetterHealth,
+        "LastCheckup": LastCheckup,
+        "Height": Height,
+        "height_feet": height_feet,
+        "height_inches": height_inches,
+        "Weight": Weight,
+        "Smoked100Cigarettes": Smoked100Cigarettes,
+        "SmokerStatus": SmokerStatus,
+        "ECigaretteUsage": ECigaretteUsage,
+        "SmokelessTobaccoUse": SmokelessTobaccoUse,
+        "AlcoholDays": AlcoholDays,
+        "PhysicalActivities": PhysicalActivities,
+        "HadDiabetes": HadDiabetes,
+        "HadKidneyDisease": HadKidneyDisease,
+        "HadStroke": HadStroke,
+        "HadCOPD": HadCOPD,
+        "HadDepressiveDisorder": HadDepressiveDisorder,
+        "HadArthritis": HadArthritis,
+        "gender": gender or None,
+        "job": job or None,
+        "height_cm": height_cm,
+        "weight_kg": weight_kg,
+        "avg_heart_rate": avg_heart_rate,
+        "resting_heart_rate": resting_heart_rate,
+        "sleep_hours": sleep_hours,
+        "respiratory_rate": respiratory_rate,
+        "calories_per_day": calories_per_day,
+        "protein_g": protein_g,
+        "carbs_g": carbs_g,
+        "fat_g": fat_g,
+        "water_liters": water_liters,
+        "symptoms": symptoms or None,
     }
 
-    def age_to_brfss(a):
-        if a is None: return None
-        for lo, hi, cat in [(18,24,1),(25,29,2),(30,34,3),(35,39,4),(40,44,5),
-                             (45,49,6),(50,54,7),(55,59,8),(60,64,9),(65,69,10),
-                             (70,74,11),(75,79,12)]:
-            if lo <= a <= hi: return cat
-        return 13
-
-    # AlcoholDays: days/week → BRFSS encoding (101 + n)
-    alcohol_days_encoded = (100 + int(alcohol_days_per_week)) if alcohol_days_per_week is not None else None
-
-    # Build the lifestyle dict — numeric codes + label strings for saving
-    lifestyle_data = {
-        # Tobacco (numeric)
-        "smoked_100_cigarettes":       YESNO_MAP.get(smoked_100),
-        "smoker_status":               SMOKER_MAP.get(smoker_status),
-        "ecigarette_usage":            ECIG_MAP.get(ecig_usage),
-        "smokeless_tobacco_use":       SMOKER_MAP.get(smokeless),
-        # Tobacco (labels for pre-fill)
-        "smoked_100_cigarettes_label": smoked_100,
-        "smoker_status_label":         smoker_status,
-        "ecig_usage_label":            ecig_usage,
-        "smokeless_label":             smokeless,
-        # Alcohol (numeric)
-        "alcohol_drinkers":            YESNO_MAP.get(alcohol_drinker),
-        "alcohol_days":                alcohol_days_encoded,
-        # Alcohol (labels)
-        "alcohol_drinker_label":       alcohol_drinker,
-        "alcohol_days_per_week_display": alcohol_days_per_week,
-        # Activity (numeric + label)
-        "physical_activities":         ACTIVITY_MAP.get(physical_activities),
-        "physical_activities_label":   physical_activities,
-        # Health status (numeric + label)
-        "general_health":              HEALTH_MAP.get(general_health),
-        "general_health_label":        general_health,
-        "good_or_better_health":       1 if general_health in ["Excellent","Very Good","Good"]
-                                       else (2 if general_health in ["Fair","Poor"] else None),
-        # Comorbidities (numeric + label)
-        "had_angina":                  YESNO_MAP.get(had_angina),
-        "had_angina_label":            had_angina,
-        "had_diabetes":                DIABETES_MAP.get(had_diabetes),
-        "had_diabetes_label":          had_diabetes,
-        "had_stroke":                  YESNO_MAP.get(had_stroke),
-        "had_stroke_label":            had_stroke,
-        "had_copd":                    YESNO_MAP.get(had_copd),
-        "had_copd_label":              had_copd,
-        "had_kidney_disease":          YESNO_MAP.get(had_kidney),
-        "had_kidney_label":            had_kidney,
-        "had_depressive_disorder":     YESNO_MAP.get(had_depression),
-        "had_depression_label":        had_depression,
-        "had_arthritis":               YESNO_MAP.get(had_arthritis),
-        "had_arthritis_label":         had_arthritis,
-        # Demographics (numeric + label)
-        "sex":                         1 if sex == "Male" else (2 if sex == "Female" else None),
-        "age_category":                age_to_brfss(age),
-        "education":                   EDU_MAP.get(education),
-        "education_label":             education,
-        "income":                      INCOME_MAP.get(income),
-        "income_label":                income,
-        "employment_status":           EMPLOY_MAP.get(employment),
-        "employment_label":            employment,
-        "home_ownership":              HOME_MAP.get(home_ownership),
-        "home_ownership_label":        home_ownership,
-        "marital_status":              MARITAL_MAP.get(marital_status),
-        "marital_status_label":        marital_status,
-        # Height / weight for BMI (used by risk adjuster)
-        "height":                      height_cm,
-        "weight":                      weight_kg,
-    }
-
-
-# ── Clinical payload for API ───────────────────────────────────────────────────
-clinical_data = {
-    "age": age, "sex": sex, "gender": gender or None, "job": job or None,
-    "height_cm": height_cm, "weight_kg": weight_kg,
-    "cp": cp, "trestbps": trestbps, "chol": chol, "fbs": fbs,
-    "restecg": restecg, "thalach": thalach, "exang": exang,
-    "oldpeak": oldpeak, "slope": slope, "ca": ca, "thal": thal,
-    "avg_heart_rate": avg_heart_rate, "resting_heart_rate": resting_heart_rate,
-    "sleep_hours": sleep_hours, "respiratory_rate": respiratory_rate,
-    "calories_per_day": calories_per_day, "protein_g": protein_g,
-    "carbs_g": carbs_g, "fat_g": fat_g, "water_liters": water_liters,
-    "symptoms": symptoms or None,
-}
-
-required_fields = {
-    "age": age, "blood pressure": trestbps, "cholesterol": chol,
-    "max heart rate": thalach, "ST depression": oldpeak,
-    "chest pain type": cp, "ECG result": restecg,
-    "ST slope": slope, "major vessels": ca, "thalassemia": thal,
-}
-missing = [name for name, val in required_fields.items() if val is None]
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# PREDICT BUTTON
-# ══════════════════════════════════════════════════════════════════════════════
-st.markdown("---")
-
-if st.button("🚑 Predict My Heart Disease Risk", type="primary", use_container_width=True):
-
-    if len(missing) >= 5:
-        st.warning(f"⚠️ {len(missing)} important clinical fields are missing — prediction may be less accurate.")
-
-    # Stage 1: UCI clinical prediction via FastAPI
-    with st.spinner("Running clinical prediction..."):
-        res = requests.post(f"{API_URL}/predict", json=clinical_data)
-
-    if res.status_code != 200:
-        st.error("❌ Clinical prediction failed.")
-        st.code(res.text)
-        st.stop()
-
-    data      = res.json()
-    base_pred = data["prediction"]
-    # Use probability if the endpoint returns it, otherwise fall back
-    base_prob = data.get("probability", 0.72 if base_pred == 1 else 0.28)
-
-    # Stage 2: BRFSS lifestyle adjustment
-    with st.spinner("Applying lifestyle personalisation..."):
-        adj_result = adjuster.adjust(base_prob, lifestyle_data)
-
-    # Store results
-    st.session_state["prediction"]      = base_pred
-    st.session_state["base_prob"]       = base_prob
-    st.session_state["adjusted_result"] = adj_result
-    st.session_state["predicted"]       = True
-    st.session_state["missing"]         = missing
-
-    # Reset any previously generated outputs
-    for k in ["diet_plan_text","risk_report","lifestyle_advice","doctor_note"]:
-        st.session_state[k] = None
-
-    # ── Save / update profile ──────────────────────────────────────────────
-    if username:
-        if pm.profile_exists(username):
-            pm.update_clinical(username, clinical_data)
-            pm.update_lifestyle(username, lifestyle_data)
+    if save_clicked:
+        if not username:
+            st.warning("Please enter a username before saving.")
         else:
-            pm.save_profile(username, clinical_data, lifestyle_data)
+            profiles[username] = profile
+            save_profiles(profiles)
+            st.success(f"Saved profile for {username}")
 
-        pm.add_prediction(
-            username,
-            prediction    = base_pred,
-            probability   = base_prob,
-            adjusted_risk = adj_result["adjusted_probability"],
-            risk_level    = adj_result["risk_level"],
-            factors       = adj_result["contributing_factors"],
-        )
-        st.sidebar.success(f"💾 Profile saved for **{username}**")
+    important_fields = {
+        "Sex": Sex,
+        "AgeCategory": AgeCategory,
+        "GeneralHealth": GeneralHealth,
+        "Height": Height,
+        "Weight": Weight,
+        "PhysicalActivities": PhysicalActivities,
+    }
+    missing_important = [name for name, value in important_fields.items() if value is None]
 
+    if st.button("Predict Risk"):
+        if len(missing_important) >= 4:
+            st.warning(
+                "Many important BRFSS fields are missing, so this prediction may be less reliable."
+            )
 
-# ── Results display ────────────────────────────────────────────────────────────
-if st.session_state["predicted"]:
-    adj  = st.session_state["adjusted_result"]
-    base = st.session_state["base_prob"]
+        st.session_state["profile"] = profile
 
-    st.markdown("---")
-    st.subheader("🔬 Your Results")
+        # Do not send local-only height_feet/height_inches to FastAPI schema.
+        api_profile = {k: v for k, v in profile.items() if k not in ["height_feet", "height_inches"]}
 
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.metric("Clinical Risk (UCI model)", f"{base:.0%}")
-    with c2:
-        delta = (adj["adjusted_probability"] - base) * 100
-        st.metric("Lifestyle-Adjusted Risk", f"{adj['adjusted_probability']:.0%}",
-                  delta=f"{delta:+.1f}%")
-    with c3:
-        level = adj["risk_level"]
-        if level == "High":
-            st.error(f"⚠️ Risk Level: **{level}**")
-        elif level == "Moderate":
-            st.warning(f"🟡 Risk Level: **{level}**")
+        res = requests.post(f"{API_URL}/predict", json=api_profile)
+
+        if res.status_code == 200:
+            data = res.json()
+            st.session_state["prediction"] = data["prediction"]
+            st.session_state["predicted"] = True
+            st.session_state["diet_plan_text"] = None
+            st.session_state["risk_report"] = None
+            st.session_state["lifestyle"] = None
+            st.session_state["doctor_note"] = None
         else:
-            st.success(f"✅ Risk Level: **{level}**")
+            st.error("Prediction failed.")
+            st.write(res.text)
 
-    with st.expander("📋 Contributing lifestyle factors", expanded=True):
-        for f in adj["contributing_factors"]:
-            st.markdown(f"- {f}")
+    if st.session_state["predicted"]:
+        st.markdown("---")
+        st.info("This is a BRFSS-only machine learning estimate/prototype, not a medical diagnosis.")
+        if st.session_state["prediction"] == 1:
+            st.error("Model Prediction: Higher Heart Disease Risk Estimate")
+        else:
+            st.success("Model Prediction: Lower Heart Disease Risk Estimate")
 
-    st.caption("⚠️ This tool is not a medical diagnosis. Please consult a healthcare professional.")
+
+saved_profile = st.session_state.get("profile")
+api_saved_profile = None
+if saved_profile:
+    api_saved_profile = {k: v for k, v in saved_profile.items() if k not in ["height_feet", "height_inches"]}
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# TAB 3 — Diet Plan
-# ══════════════════════════════════════════════════════════════════════════════
-with tab_diet:
-    if not st.session_state["predicted"]:
-        st.info("⚠️ Run a prediction first.")
-    else:
-        if st.button("🥗 Generate Personalised Diet Plan"):
-            with st.spinner("Generating diet plan..."):
-                res = requests.post(f"{API_URL}/diet-plan", json=clinical_data)
+with diet_tab:
+    if st.session_state["predicted"] and api_saved_profile:
+        if st.button("Generate Diet Plan"):
+            res = requests.post(f"{API_URL}/diet-plan", json=api_saved_profile)
             if res.status_code == 200:
                 st.session_state["diet_plan_text"] = res.json()["diet_plan"]
             else:
-                st.error("❌ Diet plan generation failed.")
+                st.error("Diet plan generation failed.")
+                st.write(res.text)
+
         if st.session_state["diet_plan_text"]:
-            st.markdown("### 🥗 Your Diet Plan")
+            st.markdown("### Diet Plan")
             st.markdown(st.session_state["diet_plan_text"])
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# TAB 4 — Risk Report
-# ══════════════════════════════════════════════════════════════════════════════
-with tab_report:
-    if not st.session_state["predicted"]:
-        st.info("⚠️ Run a prediction first.")
     else:
-        if st.button("📊 Generate Risk Report"):
-            with st.spinner("Generating risk report..."):
-                res = requests.post(
-                    f"{API_URL}/risk-report",
-                    params={"prediction": st.session_state["prediction"], "language": language},
-                    json=clinical_data
-                )
+        st.info("Please complete your profile and run prediction first.")
+
+
+with report_tab:
+    if st.session_state["predicted"] and api_saved_profile:
+        if st.button("Generate Risk Report"):
+            res = requests.post(
+                f"{API_URL}/risk-report",
+                params={"prediction": st.session_state["prediction"], "language": language},
+                json=api_saved_profile,
+            )
             if res.status_code == 200:
                 st.session_state["risk_report"] = res.json()["risk_report"]
             else:
-                st.error("❌ Risk report generation failed.")
+                st.error("Risk report generation failed.")
+                st.write(res.text)
+
         if st.session_state.get("risk_report"):
-            st.markdown("### 📊 Risk Report")
+            st.markdown("### Risk Report")
             st.markdown(st.session_state["risk_report"])
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# TAB 5 — Doctor's Note
-# ══════════════════════════════════════════════════════════════════════════════
-with tab_doctor:
-    if not st.session_state["predicted"]:
-        st.info("⚠️ Run a prediction first.")
     else:
-        if st.button("📄 Generate Doctor's Note"):
-            with st.spinner("Generating doctor's note..."):
-                res = requests.post(
-                    f"{API_URL}/doctor-note",
-                    params={"prediction": st.session_state["prediction"], "language": language},
-                    json=clinical_data
-                )
+        st.info("Please complete your profile and run prediction first.")
+
+
+with lifestyle_tab:
+    if st.session_state["predicted"] and api_saved_profile:
+        if st.button("Lifestyle Suggestions"):
+            res = requests.post(
+                f"{API_URL}/lifestyle",
+                params={"language": language},
+                json=api_saved_profile,
+            )
+            if res.status_code == 200:
+                st.session_state["lifestyle"] = res.json()["lifestyle"]
+            else:
+                st.error("Lifestyle generation failed.")
+                st.write(res.text)
+
+        if st.session_state.get("lifestyle"):
+            st.markdown("### Lifestyle Advice")
+            st.markdown(st.session_state["lifestyle"])
+    else:
+        st.info("Please complete your profile and run prediction first.")
+
+
+with doctor_tab:
+    if st.session_state["predicted"] and api_saved_profile:
+        if st.button("Generate Doctor's Note"):
+            res = requests.post(
+                f"{API_URL}/doctor-note",
+                params={"prediction": st.session_state["prediction"], "language": language},
+                json=api_saved_profile,
+            )
             if res.status_code == 200:
                 st.session_state["doctor_note"] = res.json()["doctor_note"]
             else:
-                st.error("❌ Doctor's note generation failed.")
+                st.error("Doctor note generation failed.")
+                st.write(res.text)
+
         if st.session_state.get("doctor_note"):
-            st.markdown("### 📄 Doctor's Note")
+            st.markdown("### Doctor's Note")
             st.markdown(st.session_state["doctor_note"])
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# TAB 6 — Prediction History
-# ══════════════════════════════════════════════════════════════════════════════
-with tab_history:
-    st.subheader("🕓 Prediction History")
-    if not username:
-        st.info("Enter a username in the sidebar to view your history.")
-    elif not pm.profile_exists(username):
-        st.info("No saved profile found for this username yet.")
     else:
-        history = pm.get_prediction_history(username)
-        if not history:
-            st.info("No predictions logged yet for this user.")
-        else:
-            for i, record in enumerate(reversed(history)):
-                label = f"{'⚠️ High' if record['risk_level']=='High' else ('🟡 Moderate' if record['risk_level']=='Moderate' else '✅ Low')} Risk — {record['timestamp'][:10]}"
-                with st.expander(label):
-                    c1, c2, c3 = st.columns(3)
-                    c1.metric("Clinical Probability", f"{record['probability']:.0%}")
-                    c2.metric("Adjusted Risk",        f"{record['adjusted_risk']:.0%}")
-                    c3.metric("Risk Level",           record.get("risk_level","—"))
-                    if record.get("factors"):
-                        st.markdown("**Contributing factors:**")
-                        for f in record["factors"]:
-                            st.markdown(f"- {f}")
+        st.info("Please complete your profile and run prediction first.")
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# Sidebar Chatbot — profile-aware
-# ══════════════════════════════════════════════════════════════════════════════
 with st.sidebar:
-    st.markdown("---")
-    st.header("💬 Heart Health Chatbot")
-
-    user_input = st.chat_input("Ask anything about your heart health...")
+    st.header("Diet & Medical Chatbot")
+    user_input = st.chat_input("Ask anything")
 
     if user_input:
-        # Build context from saved profile + latest prediction
-        context_parts = []
-
-        if username and pm.profile_exists(username):
-            summary = pm.get_summary(username)
-            if summary:
-                context_parts.append(summary)
-
-        if st.session_state.get("adjusted_result"):
-            adj = st.session_state["adjusted_result"]
-            context_parts.append(
-                f"Latest risk: {adj['adjusted_probability']:.0%} ({adj['risk_level']}). "
-                f"Top factors: {'; '.join(adj['contributing_factors'][:3])}."
-            )
-
-        context = "\n".join(context_parts)
-        full_msg = f"{context}\n\nUser question: {user_input}" if context else user_input
-
         res = requests.post(
             f"{API_URL}/chat",
-            json={"message": full_msg, "language": language}
+            json={"message": user_input, "language": language},
         )
 
         if res.status_code == 200:
             reply = res.json()["reply"]
-            st.session_state.chat_history.append({"role": "user",      "content": user_input})
+            st.session_state.chat_history.append({"role": "user", "content": user_input})
             st.session_state.chat_history.append({"role": "assistant", "content": reply})
         else:
-            st.error("Chatbot request failed.")
+            st.error("Chatbot failed.")
+            st.write(res.text)
 
     for msg in st.session_state.chat_history[::-1]:
         with st.chat_message(msg["role"]):
