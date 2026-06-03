@@ -15,9 +15,27 @@ class PredictPipeline:
             self.preprocessor = pickle.load(f)
 
     def _to_df(self, data: dict) -> pd.DataFrame:
-        """Convert input dict to a single-row DataFrame, dropping None values."""
-        cleaned = {k: v for k, v in data.items() if v is not None}
-        return pd.DataFrame([cleaned])
+        """
+        Convert input dict to DataFrame, filling None values with
+        safe defaults so the preprocessor doesn't crash on missing inputs.
+        """
+        defaults = {
+            "age": 50,  # median adult age
+            "sex": 1,  # Male
+            "cp": 2,  # Non-anginal (least alarming default)
+            "trestbps": 120,  # normal resting BP
+            "chol": 200,  # borderline normal
+            "fbs": 0,  # no high fasting blood sugar
+            "restecg": 0,  # normal ECG
+            "thalach": 150,  # reasonable max HR
+            "exang": 0,  # no exercise angina
+            "oldpeak": 1.0,  # mild ST depression
+            "slope": 1,  # flat
+            "ca": 0,  # no major vessels
+            "thal": 2,  # normal
+        }
+        filled = {**defaults, **{k: v for k, v in data.items() if v is not None}}
+        return pd.DataFrame([filled])
 
     def predict(self, data: dict) -> int:
         """

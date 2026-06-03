@@ -1,7 +1,7 @@
 """
 profile_manager.py
 ------------------
-Manages persistent user profiles for the personalised heart disease
+Manages persistent user profiles for the personalized heart disease
 risk chatbot. Each profile is stored as a JSON file under profiles/.
 
 Profile structure
@@ -44,8 +44,7 @@ from datetime import datetime
 from typing import Optional
 
 # Profiles folder sits at project_root/profiles/
-PROFILES_DIR = os.path.join(os.path.dirname(__file__), "../../..", "..", "..", "profiles")
-
+PROFILES_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "profiles")
 
 class ProfileManager:
     """Create, read, update and delete user profiles stored as JSON files."""
