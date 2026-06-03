@@ -232,7 +232,6 @@ The model has strong recall for the heart disease class, meaning it catches many
 
 The project presentation describes the system as a two-stage architecture: a clinical prediction stage and a BRFSS/lifestyle adjustment stage. The current codebase contains both the older UCI-style clinical pipeline pieces and the newer BRFSS training script.
 
-Add this image to the repo as `docs/pipeline_architecture.png`, then include it in the README:
 
 ```markdown
 ![Two-stage pipeline](docs/pipeline_architecture.png)
@@ -415,21 +414,5 @@ Because of this, one important future improvement is to align the frontend form 
 - The AI assistant can generate helpful summaries, but it is not a medical authority.
 - The project is not a diagnostic tool.
 
----
 
-## Future Work
 
-- Align the frontend inputs with the exact BRFSS feature list.
-- Add feature importance or SHAP explanations.
-- Improve precision while maintaining strong recall.
-- Add better medical safety guardrails to the chatbot.
-- Add wearable data such as heart rate, sleep, and respiratory rate.
-- Add nutrition tracking inputs.
-- Improve validation on additional datasets.
-- Add clearer documentation for the older UCI pipeline versus the newer BRFSS pipeline.
-
----
-
-## Authors
-
-Course project by the 111project team.
