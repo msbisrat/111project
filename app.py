@@ -1,169 +1,379 @@
-import io
-import unicodedata
-import pickle
-import pandas as pd
+import os
+import sys
+from typing import Optional
+
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from typing import Optional
-from fpdf import FPDF
 from groq import Groq
-import os
-import uvicorn
-import sys
 
-# Ensure project root is on sys.path for importing src.* reliably
 PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from src.mlproject.predict_pipelines import PredictPipeline
 
-# Load environment variables
 load_dotenv()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
-client = Groq(api_key=GROQ_API_KEY)
+app = FastAPI(title="BRFSS Heart Disease Predictor")
 
-# --------------------- FastAPI Setup ---------------------
-app = FastAPI(title="🪀 Heart Disease Predictor & Diet Assistant")
 
-# --------------------- Request Schemas ---------------------
 class HealthProfile(BaseModel):
-    # Basic information
-    age: Optional[int] = None
-    sex: Optional[str] = None
+    # BRFSS-only prediction features
+    Sex: Optional[float] = None
+    AgeCategory: Optional[float] = None
+    Education: Optional[float] = None
+    Income: Optional[float] = None
+    EmploymentStatus: Optional[float] = None
+    MaritalStatus: Optional[float] = None
+    HomeOwnership: Optional[float] = None
+    GeneralHealth: Optional[float] = None
+    GoodOrBetterHealth: Optional[float] = None
+    LastCheckup: Optional[float] = None
+    Height: Optional[float] = None
+    Weight: Optional[float] = None
+    Smoked100Cigarettes: Optional[str] = None
+    SmokerStatus: Optional[float] = None
+    ECigaretteUsage: Optional[float] = None
+    SmokelessTobaccoUse: Optional[float] = None
+    AlcoholDays: Optional[float] = None
+    PhysicalActivities: Optional[float] = None
+    HadDiabetes: Optional[str] = None
+    HadKidneyDisease: Optional[str] = None
+    HadStroke: Optional[str] = None
+    HadCOPD: Optional[str] = None
+    HadDepressiveDisorder: Optional[str] = None
+    HadArthritis: Optional[str] = None
+
+    # Extra context for AI recommendations only
+    username: Optional[str] = None
     gender: Optional[str] = None
     job: Optional[str] = None
-    weight_kg: Optional[float] = None
     height_cm: Optional[float] = None
-
-    # Original heart disease model features
-    cp: Optional[str] = None
-    trestbps: Optional[int] = None
-    chol: Optional[int] = None
-    fbs: Optional[str] = None
-    restecg: Optional[str] = None
-    thalach: Optional[int] = None
-    exang: Optional[str] = None
-    oldpeak: Optional[float] = None
-    slope: Optional[str] = None
-    ca: Optional[int] = None
-    thal: Optional[str] = None
-
-    # Wearable data
+    weight_kg: Optional[float] = None
     avg_heart_rate: Optional[float] = None
     resting_heart_rate: Optional[float] = None
     sleep_hours: Optional[float] = None
     respiratory_rate: Optional[float] = None
-
-    # Nutritional data
     calories_per_day: Optional[float] = None
     protein_g: Optional[float] = None
     carbs_g: Optional[float] = None
     fat_g: Optional[float] = None
     water_liters: Optional[float] = None
-
-    # User-reported symptoms
     symptoms: Optional[str] = None
+
 
 class ChatRequest(BaseModel):
     message: str
     language: str = "English"
-def safe_index(value, options):
-    if value is None or value == "I don't know":
-        return None
-    return options.index(value)
 
-def yes_no_to_int(value):
-    if value is None or value == "I don't know":
-        return None
-    return 1 if value == "Yes" else 0
 
-def sex_to_int(value):
-    if value is None or value == "I don't know":
-        return None
-    return 1 if value == "Male" else 0
+# ---------------------------------------------------------------------
+# Human-readable BRFSS code labels for AI-generated diet/report text
+# ---------------------------------------------------------------------
 
-def build_patient_context(profile: HealthProfile):
-    return f"""
-Additional patient information:
+SEX_LABELS = {
+    1.0: "Male",
+    2.0: "Female",
+}
 
-Basic information:
-Age: {profile.age}
-Biological sex: {profile.sex}
-Gender: {profile.gender}
-Job: {profile.job}
-Weight kg: {profile.weight_kg}
-Height cm: {profile.height_cm}
+AGE_CATEGORY_LABELS = {
+    1.0: "18-24",
+    2.0: "25-29",
+    3.0: "30-34",
+    4.0: "35-39",
+    5.0: "40-44",
+    6.0: "45-49",
+    7.0: "50-54",
+    8.0: "55-59",
+    9.0: "60-64",
+    10.0: "65-69",
+    11.0: "70-74",
+    12.0: "75-79",
+    13.0: "80+",
+}
 
-Wearable data:
-Average heart rate: {profile.avg_heart_rate}
-Resting heart rate: {profile.resting_heart_rate}
-Sleep hours: {profile.sleep_hours}
-Respiratory rate: {profile.respiratory_rate}
+EDUCATION_LABELS = {
+    1.0: "Never attended school or kindergarten only",
+    2.0: "Grades 1-8",
+    3.0: "Grades 9-11",
+    4.0: "High school graduate / GED",
+    5.0: "Some college or technical school",
+    6.0: "College graduate",
+    9.0: "Refused / unknown",
+}
 
-Nutrition data:
-Calories per day: {profile.calories_per_day}
-Protein grams per day: {profile.protein_g}
-Carbs grams per day: {profile.carbs_g}
-Fat grams per day: {profile.fat_g}
-Water liters per day: {profile.water_liters}
+INCOME_LABELS = {
+    1.0: "Less than $10,000",
+    2.0: "$10,000 to less than $15,000",
+    3.0: "$15,000 to less than $20,000",
+    4.0: "$20,000 to less than $25,000",
+    5.0: "$25,000 to less than $35,000",
+    6.0: "$35,000 to less than $50,000",
+    7.0: "$50,000 to less than $75,000",
+    8.0: "$75,000 to less than $100,000",
+    9.0: "$100,000 to less than $150,000",
+    10.0: "$150,000 to less than $200,000",
+    11.0: "$200,000 or more",
+    77.0: "Don't know",
+    99.0: "Refused",
+}
 
-User-reported symptoms:
-{profile.symptoms}
-"""
+EMPLOYMENT_LABELS = {
+    1.0: "Employed for wages",
+    2.0: "Self-employed",
+    3.0: "Out of work for 1 year or more",
+    4.0: "Out of work for less than 1 year",
+    5.0: "Homemaker",
+    6.0: "Student",
+    7.0: "Retired",
+    8.0: "Unable to work",
+    9.0: "Refused",
+}
 
-# --------------------- Translator ---------------------
+MARITAL_LABELS = {
+    1.0: "Married",
+    2.0: "Divorced",
+    3.0: "Widowed",
+    4.0: "Separated",
+    5.0: "Never married",
+    6.0: "Unmarried couple",
+    9.0: "Refused",
+}
+
+HOME_OWNERSHIP_LABELS = {
+    1.0: "Own",
+    2.0: "Rent",
+    3.0: "Other arrangement",
+    7.0: "Don't know",
+    9.0: "Refused",
+}
+
+GENERAL_HEALTH_LABELS = {
+    1.0: "Excellent",
+    2.0: "Very good",
+    3.0: "Good",
+    4.0: "Fair",
+    5.0: "Poor",
+    7.0: "Don't know",
+    9.0: "Refused",
+}
+
+YES_NO_CODE_LABELS = {
+    1.0: "Yes",
+    2.0: "No",
+    7.0: "Don't know",
+    9.0: "Refused",
+}
+
+LAST_CHECKUP_LABELS = {
+    1.0: "Within past year",
+    2.0: "Within past 2 years",
+    3.0: "Within past 5 years",
+    4.0: "5 or more years ago",
+    7.0: "Don't know",
+    8.0: "Never",
+    9.0: "Refused",
+}
+
+SMOKER_STATUS_LABELS = {
+    1.0: "Current smoker, every day",
+    2.0: "Current smoker, some days",
+    3.0: "Former smoker",
+    4.0: "Never smoked",
+    9.0: "Don't know / refused",
+}
+
+ECIG_LABELS = {
+    1.0: "Use every day",
+    2.0: "Use some days",
+    3.0: "Not at all",
+    4.0: "Never used",
+    7.0: "Don't know",
+    9.0: "Refused",
+}
+
+SMOKELESS_LABELS = {
+    1.0: "Use every day",
+    2.0: "Use some days",
+    3.0: "Not at all",
+    7.0: "Don't know",
+    9.0: "Refused",
+}
+
+
+def code_to_label(value, mapping):
+    if value is None:
+        return "Unknown"
+    try:
+        return mapping.get(float(value), "Unknown")
+    except (TypeError, ValueError):
+        return "Unknown"
+
+
+def height_code_to_label(value):
+    if value is None:
+        return "Unknown"
+    try:
+        value = int(value)
+        feet = value // 100
+        inches = value % 100
+        return f"{feet} ft {inches} in"
+    except (TypeError, ValueError):
+        return "Unknown"
+
+
+def alcohol_days_to_label(value):
+    if value is None:
+        return "Unknown"
+
+    try:
+        value = int(value)
+    except (TypeError, ValueError):
+        return "Unknown"
+
+    if value == 888:
+        return "No alcohol use in past 30 days"
+    if 101 <= value <= 107:
+        return f"{value - 100} day(s) per week"
+    if 201 <= value <= 230:
+        return f"{value - 200} day(s) per month"
+    if value in [777, 999]:
+        return "Don't know / refused"
+
+    return f"BRFSS alcohol days code {value}"
+
+
+def require_groq_client():
+    if client is None:
+        raise HTTPException(
+            status_code=500,
+            detail="GROQ_API_KEY is missing. Please add it to your .env file."
+        )
+    return client
+
+
 def translate_text(text: str, target_language: str) -> str:
     if target_language == "English":
         return text
-    response = client.chat.completions.create(
+
+    groq_client = require_groq_client()
+    response = groq_client.chat.completions.create(
         model="openai/gpt-oss-120b",
         messages=[
             {"role": "system", "content": "You are a helpful translator."},
             {"role": "user", "content": f"Translate this to {target_language}:\n{text}"}
-        ]
+        ],
     )
     return response.choices[0].message.content.strip()
 
-# --------------------- Endpoints ---------------------
+
+def build_patient_context(profile: HealthProfile) -> str:
+    sex_label = code_to_label(profile.Sex, SEX_LABELS)
+    age_label = code_to_label(profile.AgeCategory, AGE_CATEGORY_LABELS)
+    education_label = code_to_label(profile.Education, EDUCATION_LABELS)
+    income_label = code_to_label(profile.Income, INCOME_LABELS)
+    employment_label = code_to_label(profile.EmploymentStatus, EMPLOYMENT_LABELS)
+    marital_label = code_to_label(profile.MaritalStatus, MARITAL_LABELS)
+    home_label = code_to_label(profile.HomeOwnership, HOME_OWNERSHIP_LABELS)
+    general_health_label = code_to_label(profile.GeneralHealth, GENERAL_HEALTH_LABELS)
+    good_or_better_label = code_to_label(profile.GoodOrBetterHealth, YES_NO_CODE_LABELS)
+    last_checkup_label = code_to_label(profile.LastCheckup, LAST_CHECKUP_LABELS)
+    height_label = height_code_to_label(profile.Height)
+    smoker_status_label = code_to_label(profile.SmokerStatus, SMOKER_STATUS_LABELS)
+    ecig_label = code_to_label(profile.ECigaretteUsage, ECIG_LABELS)
+    smokeless_label = code_to_label(profile.SmokelessTobaccoUse, SMOKELESS_LABELS)
+    alcohol_label = alcohol_days_to_label(profile.AlcoholDays)
+    physical_activity_label = code_to_label(profile.PhysicalActivities, YES_NO_CODE_LABELS)
+
+    return f"""
+BRFSS prediction fields:
+Sex: {sex_label} (code: {profile.Sex})
+Age category: {age_label} (code: {profile.AgeCategory})
+Education: {education_label} (code: {profile.Education})
+Income: {income_label} (code: {profile.Income})
+Employment status: {employment_label} (code: {profile.EmploymentStatus})
+Marital status: {marital_label} (code: {profile.MaritalStatus})
+Home ownership: {home_label} (code: {profile.HomeOwnership})
+General health: {general_health_label} (code: {profile.GeneralHealth})
+Good or better health: {good_or_better_label} (code: {profile.GoodOrBetterHealth})
+Last checkup: {last_checkup_label} (code: {profile.LastCheckup})
+Height: {height_label} (BRFSS code: {profile.Height})
+Weight pounds: {profile.Weight}
+Smoked 100 cigarettes: {profile.Smoked100Cigarettes}
+Smoker status: {smoker_status_label} (code: {profile.SmokerStatus})
+E-cigarette usage: {ecig_label} (code: {profile.ECigaretteUsage})
+Smokeless tobacco use: {smokeless_label} (code: {profile.SmokelessTobaccoUse})
+Alcohol days: {alcohol_label} (code: {profile.AlcoholDays})
+Physical activities in past month: {physical_activity_label} (code: {profile.PhysicalActivities})
+Diabetes: {profile.HadDiabetes}
+Kidney disease: {profile.HadKidneyDisease}
+Stroke: {profile.HadStroke}
+COPD: {profile.HadCOPD}
+Depressive disorder: {profile.HadDepressiveDisorder}
+Arthritis: {profile.HadArthritis}
+
+Extra context for AI only:
+Username: {profile.username}
+Gender: {profile.gender}
+Job: {profile.job}
+Height cm: {profile.height_cm}
+Weight kg: {profile.weight_kg}
+Average heart rate: {profile.avg_heart_rate}
+Resting heart rate: {profile.resting_heart_rate}
+Sleep hours: {profile.sleep_hours}
+Respiratory rate: {profile.respiratory_rate}
+Calories per day: {profile.calories_per_day}
+Protein: {profile.protein_g}
+Carbs: {profile.carbs_g}
+Fat: {profile.fat_g}
+Water liters: {profile.water_liters}
+Symptoms: {profile.symptoms}
+"""
+
 
 @app.get("/debug-info")
 def debug_info():
-    import sys as _sys
     import sklearn as _sk
-    return {"python": _sys.version, "sklearn": _sk.__version__}
+    return {
+        "python": sys.version,
+        "sklearn": _sk.__version__,
+        "model": "Option B BRFSS-only model",
+        "model_path": "artifacts/model.pkl",
+        "preprocessor_path": "artifacts/preprocessor.pkl",
+    }
+
 
 @app.post("/predict")
 def predict(profile: HealthProfile):
     try:
         model_input = {
-            "age": profile.age,
-            "sex": sex_to_int(profile.sex),
-            "cp": safe_index(
-                profile.cp,
-                ["Typical Angina", "Atypical Angina", "Non-anginal", "Asymptomatic"]
-            ),
-            "trestbps": profile.trestbps,
-            "chol": profile.chol,
-            "fbs": yes_no_to_int(profile.fbs),
-            "restecg": safe_index(
-                profile.restecg,
-                ["Normal", "ST-T Abnormality", "Left Ventricular Hypertrophy"]
-            ),
-            "thalach": profile.thalach,
-            "exang": yes_no_to_int(profile.exang),
-            "oldpeak": profile.oldpeak,
-            "slope": safe_index(
-                profile.slope,
-                ["Upsloping", "Flat", "Downsloping"]
-            ),
-            "ca": profile.ca,
-            "thal": safe_index(
-                profile.thal,
-                ["Normal", "Fixed Defect", "Reversible Defect"]
-            ),
+            "Sex": profile.Sex,
+            "AgeCategory": profile.AgeCategory,
+            "Education": profile.Education,
+            "Income": profile.Income,
+            "EmploymentStatus": profile.EmploymentStatus,
+            "MaritalStatus": profile.MaritalStatus,
+            "HomeOwnership": profile.HomeOwnership,
+            "GeneralHealth": profile.GeneralHealth,
+            "GoodOrBetterHealth": profile.GoodOrBetterHealth,
+            "LastCheckup": profile.LastCheckup,
+            "Height": profile.Height,
+            "Weight": profile.Weight,
+            "Smoked100Cigarettes": profile.Smoked100Cigarettes,
+            "SmokerStatus": profile.SmokerStatus,
+            "ECigaretteUsage": profile.ECigaretteUsage,
+            "SmokelessTobaccoUse": profile.SmokelessTobaccoUse,
+            "AlcoholDays": profile.AlcoholDays,
+            "PhysicalActivities": profile.PhysicalActivities,
+            "HadDiabetes": profile.HadDiabetes,
+            "HadKidneyDisease": profile.HadKidneyDisease,
+            "HadStroke": profile.HadStroke,
+            "HadCOPD": profile.HadCOPD,
+            "HadDepressiveDisorder": profile.HadDepressiveDisorder,
+            "HadArthritis": profile.HadArthritis,
         }
 
         pipeline = PredictPipeline()
@@ -171,164 +381,146 @@ def predict(profile: HealthProfile):
 
         return {
             "prediction": int(prediction),
-            "risk": "High" if prediction == 1 else "Low"
+            "risk": "High" if int(prediction) == 1 else "Low",
+            "message": "BRFSS-only model estimate, not a medical diagnosis."
         }
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-
 @app.post("/diet-plan")
 def generate_diet_plan(profile: HealthProfile):
-    patient_context = build_patient_context(profile)
-
+    groq_client = require_groq_client()
     prompt = f"""
 Create a personalized heart-healthy diet plan.
 
-Original medical information:
-Age: {profile.age}
-Sex: {profile.sex}
-Blood pressure: {profile.trestbps}
-Cholesterol: {profile.chol}
-Fasting blood sugar over 120: {profile.fbs}
-Max heart rate: {profile.thalach}
-ST depression: {profile.oldpeak}
-Thalassemia: {profile.thal}
+{build_patient_context(profile)}
 
-{patient_context}
-
-If some information is missing, do not make up exact values.
-Use only the information provided.
-Include:
-1. Main nutrition goals
-2. Foods to eat
-3. Foods to limit
-4. One sample day of meals
-5. Lifestyle notes based on sleep, symptoms, job, and wearable data if available
+Important:
+- This is educational advice, not a diagnosis.
+- Use wearable, nutrition, symptoms, height/weight, and job information if provided.
+- Do not make up missing values.
+- Use the readable labels provided in the patient context. Do not reinterpret numeric BRFSS codes yourself.
 """
-
-    response = client.chat.completions.create(
+    response = groq_client.chat.completions.create(
         model="openai/gpt-oss-120b",
         messages=[
-            {"role": "system", "content": "You are a certified medical dietitian. Give educational advice, not diagnosis."},
-            {"role": "user", "content": prompt}
+            {
+                "role": "system",
+                "content": "You are a careful medical dietitian. Give educational advice, not diagnosis. Use the provided readable labels instead of guessing numeric BRFSS codes."
+            },
+            {"role": "user", "content": prompt},
         ],
-        max_tokens=800
+        max_tokens=900,
     )
-
     return {"diet_plan": response.choices[0].message.content}
 
 
 @app.post("/risk-report")
 def risk_report(profile: HealthProfile, prediction: int, language: str = "English"):
-    patient_context = build_patient_context(profile)
-
+    groq_client = require_groq_client()
     prompt = f"""
-You are a cardiology assistant. Explain why the patient was predicted as {'high' if prediction else 'low'} risk.
+Explain this BRFSS-only model risk result in patient-friendly language.
 
-Original model information:
-Age: {profile.age}
-Sex: {profile.sex}
-Cholesterol: {profile.chol}
-Blood pressure: {profile.trestbps}
-Max heart rate: {profile.thalach}
-ST depression: {profile.oldpeak}
-Exercise-induced angina: {profile.exang}
-Thalassemia: {profile.thal}
+Model prediction: {"High" if prediction else "Low"}
 
-{patient_context}
+{build_patient_context(profile)}
 
 Important:
-The ML prediction is based only on the original heart disease model fields.
-The wearable, nutrition, symptom, and basic information should be used only as extra context for explanation and recommendations.
-Do not claim the extra fields directly changed the ML prediction unless the model is retrained with those fields.
+- This is a model estimate/prototype, not a medical diagnosis.
+- The prediction is based only on the BRFSS fields, not UCI clinical fields.
+- Mention missing fields if they may affect reliability.
+- Use the readable labels provided in the patient context. Do not reinterpret numeric BRFSS codes yourself.
 """
-
-    response = client.chat.completions.create(
+    response = groq_client.chat.completions.create(
         model="openai/gpt-oss-120b",
-        messages=[{"role": "user", "content": prompt}]
+        messages=[
+            {
+                "role": "system",
+                "content": "You explain health model outputs carefully. Use the provided readable labels instead of guessing numeric BRFSS codes."
+            },
+            {"role": "user", "content": prompt}
+        ],
+        max_tokens=700,
     )
-
     return {"risk_report": translate_text(response.choices[0].message.content.strip(), language)}
 
 
 @app.post("/lifestyle")
 def lifestyle_advice(profile: HealthProfile, language: str = "English"):
-    patient_context = build_patient_context(profile)
-
+    groq_client = require_groq_client()
     prompt = f"""
-Give daily lifestyle advice for heart health.
+Give practical daily lifestyle advice for heart health.
 
-Original medical information:
-Age: {profile.age}
-Sex: {profile.sex}
-Blood pressure: {profile.trestbps}
-Cholesterol: {profile.chol}
-Max heart rate: {profile.thalach}
-ST depression: {profile.oldpeak}
+{build_patient_context(profile)}
 
-{patient_context}
+Use available information about general health, activity, smoking, alcohol, chronic conditions,
+wearable data, sleep, nutrition, symptoms, and job if provided.
 
-Use wearable data, nutrition data, symptoms, and basic information if provided.
-If some information is missing, say what extra information would help.
-Keep the advice practical and easy to follow.
+Important:
+- Use the readable labels provided in the patient context.
+- Do not reinterpret numeric BRFSS codes yourself.
 """
-
-    response = client.chat.completions.create(
+    response = groq_client.chat.completions.create(
         model="openai/gpt-oss-120b",
-        messages=[{"role": "user", "content": prompt}]
+        messages=[
+            {
+                "role": "system",
+                "content": "You give careful lifestyle advice. Use the provided readable labels instead of guessing numeric BRFSS codes."
+            },
+            {"role": "user", "content": prompt}
+        ],
+        max_tokens=700,
     )
-
     return {"lifestyle": translate_text(response.choices[0].message.content.strip(), language)}
 
 
 @app.post("/doctor-note")
 def doctor_note(profile: HealthProfile, prediction: int, language: str = "English"):
-    patient_context = build_patient_context(profile)
-
+    groq_client = require_groq_client()
     prompt = f"""
-Draft a doctor's summary note from the patient profile and risk status.
+Draft a concise doctor's summary note from the patient profile and BRFSS-only model risk status.
 
-Risk status: {"High" if prediction else "Low"}
+Model risk status: {"High" if prediction else "Low"}
 
-Original medical information:
-Age: {profile.age}
-Sex: {profile.sex}
-Blood pressure: {profile.trestbps}
-Cholesterol: {profile.chol}
-Max heart rate: {profile.thalach}
-ST depression: {profile.oldpeak}
-Exercise-induced angina: {profile.exang}
-Thalassemia: {profile.thal}
-Major vessels colored: {profile.ca}
+{build_patient_context(profile)}
 
-{patient_context}
+Do not diagnose. Mention missing information if important. Recommend clinical follow-up if symptoms are concerning.
 
-Write a clear summary note.
-Mention missing information if important.
-Do not diagnose. Recommend clinical follow-up if symptoms are concerning.
+Important:
+- Use the readable labels provided in the patient context.
+- Do not reinterpret numeric BRFSS codes yourself.
 """
-
-    response = client.chat.completions.create(
+    response = groq_client.chat.completions.create(
         model="openai/gpt-oss-120b",
-        messages=[{"role": "user", "content": prompt}]
+        messages=[
+            {
+                "role": "system",
+                "content": "You draft careful medical summary notes. Use the provided readable labels instead of guessing numeric BRFSS codes."
+            },
+            {"role": "user", "content": prompt}
+        ],
+        max_tokens=700,
     )
-
     return {"doctor_note": translate_text(response.choices[0].message.content.strip(), language)}
+
 
 @app.post("/chat")
 def chatbot(request: ChatRequest):
-    messages = [
-        {"role": "system", "content": "You are Healthy(B), a multilingual diet and heart health expert."},
-        {"role": "user", "content": request.message}
-    ]
-    response = client.chat.completions.create(model="openai/gpt-oss-120b", messages=messages, max_tokens=300)
+    groq_client = require_groq_client()
+    response = groq_client.chat.completions.create(
+        model="openai/gpt-oss-120b",
+        messages=[
+            {"role": "system", "content": "You are Healthy(B), a multilingual diet and heart health expert."},
+            {"role": "user", "content": request.message},
+        ],
+        max_tokens=300,
+    )
     reply = response.choices[0].message.content
     return {"reply": translate_text(reply, request.language)}
 
 
 if __name__ == "__main__":
-    # local dev: run with `python main.py`
     import uvicorn
     uvicorn.run("app:app", host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
