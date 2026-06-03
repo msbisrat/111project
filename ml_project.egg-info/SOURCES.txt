@@ -1,5 +1,6 @@
 LICENSE
 README.md
+README.txt
 setup.py
 ml_project.egg-info/PKG-INFO
 ml_project.egg-info/SOURCES.txt
@@ -11,6 +12,8 @@ src/mlproject/__init__.py
 src/mlproject/exception.py
 src/mlproject/logger.py
 src/mlproject/predict_pipelines.py
+src/mlproject/profile_manager.py
+src/mlproject/risk_adjustment.py
 src/mlproject/utils.py
 src/mlproject/components/__init__.py
 src/mlproject/components/data_ingestion.py

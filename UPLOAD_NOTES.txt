@@ -1,0 +1,12 @@
+GitHub-ready package contents:
+- Includes code, CSV files, trained model files, README, requirements, and needed project folders.
+- Excludes .env, .venv/venv, Python cache, Mac metadata, logs, MLflow runs, CatBoost temp files, and local saved_profiles.json.
+- Use .env.example as a template. Create your own .env locally and add your real GROQ_API_KEY there.
+
+Recommended run commands:
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python3 train_brfss_option_b.py   # only needed if retraining
+uvicorn app:app --reload          # terminal 1
+streamlit run streamlit_app.py    # terminal 2

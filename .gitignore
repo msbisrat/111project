@@ -1,37 +1,32 @@
-# Python
+# Python cache
 __pycache__/
 *.pyc
 
 # Virtual environments
-.env
 .venv/
 venv/
 
+# Private environment/API keys
+.env
+.env.*
+!.env.example
+secrets.toml
+.streamlit/secrets.toml
+
 # Mac files
 .DS_Store
+__MACOSX/
 
-# Jupyter
+# Jupyter checkpoints
 .ipynb_checkpoints/
 
-# Data folders
-data/raw/
-data/processed/
-
-# Dataset files
-*.csv
-
-# Trained models
-models/*.pkl
-models/*.joblib
-models/*.h5
-
-# Vector databases
-*.faiss
-*.index
-
-# Environment/API keys
-.env.local
-secrets.toml
-
-# Logs
+# Logs / experiment tracking output
 *.log
+mlruns/
+catboost_info/
+
+# Local saved user profiles
+saved_profiles.json
+
+# Backup files
+*~

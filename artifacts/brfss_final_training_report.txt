@@ -6,52 +6,52 @@ The baseline stage uses simple/default models without imbalance handling. The tu
 
 All validation results sorted by F1/Recall/Precision/ROC AUC:
                  group               model                                                                     params  train_seconds  accuracy  precision_class_1  recall_class_1  f1_class_1  roc_auc
-          After tuning       Random Forest n_estimators=100; max_depth=16; min_samples_leaf=20; class_weight=balanced      17.832399  0.761086           0.245924        0.751653    0.370597 0.835283
-          After tuning       Random Forest n_estimators=200; max_depth=12; min_samples_leaf=30; class_weight=balanced      32.267000  0.741107           0.234205        0.778342    0.360066 0.835408
-          After tuning       Random Forest n_estimators=100; max_depth=12; min_samples_leaf=30; class_weight=balanced      18.551811  0.740543           0.233592        0.777161    0.359215 0.835254
-          After tuning   Gradient Boosting  n_estimators=200; learning_rate=0.05; max_depth=3; balanced sample_weight     201.125770  0.730355           0.229426        0.797709    0.356361 0.837710
-          After tuning   Gradient Boosting  n_estimators=100; learning_rate=0.10; max_depth=3; balanced sample_weight      98.174025  0.731338           0.229661        0.794757    0.356349 0.837690
-          After tuning Logistic Regression                                               C=1.0; class_weight=balanced       1.181105  0.739284           0.231550        0.770312    0.356069 0.833613
-          After tuning   Gradient Boosting  n_estimators=100; learning_rate=0.05; max_depth=3; balanced sample_weight      94.837198  0.726763           0.227105        0.798890    0.353670 0.835636
-          After tuning       Decision Tree                   max_depth=12; min_samples_leaf=80; class_weight=balanced       2.703713  0.728067           0.223479        0.770194    0.346436 0.819709
-          After tuning       Decision Tree                    max_depth=8; min_samples_leaf=50; class_weight=balanced       2.164563  0.706740           0.214317        0.800425    0.338105 0.822287
-Before tuning baseline       Decision Tree                                              default tree; no class_weight       3.727702  0.848231           0.232690        0.270666    0.250246 0.589353
-Before tuning baseline Logistic Regression                                             default style; no class_weight       0.921783  0.908181           0.544789        0.114195    0.188812 0.833437
-Before tuning baseline   Gradient Boosting                                default gradient boosting; no sample_weight     100.024160  0.908766           0.569372        0.102740    0.174070 0.837433
-Before tuning baseline       Random Forest                              default RF; n_estimators=100; no class_weight      25.466862  0.906612           0.505069        0.100024    0.166979 0.811562
+          After tuning       Random Forest n_estimators=100; max_depth=16; min_samples_leaf=20; class_weight=balanced       8.944380  0.761098           0.245756        0.750590    0.370278 0.835583
+          After tuning       Random Forest n_estimators=200; max_depth=12; min_samples_leaf=30; class_weight=balanced      15.739902  0.740720           0.233839        0.777870    0.359582 0.835390
+          After tuning       Random Forest n_estimators=100; max_depth=12; min_samples_leaf=30; class_weight=balanced       8.245798  0.740322           0.233616        0.778342    0.359369 0.835321
+          After tuning   Gradient Boosting  n_estimators=200; learning_rate=0.05; max_depth=3; balanced sample_weight     155.815092  0.730355           0.229426        0.797709    0.356361 0.837710
+          After tuning   Gradient Boosting  n_estimators=100; learning_rate=0.10; max_depth=3; balanced sample_weight      80.852817  0.731338           0.229661        0.794757    0.356349 0.837690
+          After tuning Logistic Regression                                               C=1.0; class_weight=balanced       0.823639  0.739284           0.231550        0.770312    0.356069 0.833613
+          After tuning   Gradient Boosting  n_estimators=100; learning_rate=0.05; max_depth=3; balanced sample_weight      82.703148  0.726763           0.227105        0.798890    0.353670 0.835636
+          After tuning       Decision Tree                   max_depth=12; min_samples_leaf=80; class_weight=balanced       2.538607  0.728067           0.223479        0.770194    0.346436 0.819662
+          After tuning       Decision Tree                    max_depth=8; min_samples_leaf=50; class_weight=balanced       1.941970  0.706740           0.214317        0.800425    0.338105 0.822286
+Before tuning baseline       Decision Tree                                              default tree; no class_weight       3.821985  0.847944           0.231806        0.270076    0.249482 0.588997
+Before tuning baseline Logistic Regression                                             default style; no class_weight       0.569990  0.908181           0.544789        0.114195    0.188812 0.833437
+Before tuning baseline   Gradient Boosting                                default gradient boosting; no sample_weight      79.219463  0.908766           0.569372        0.102740    0.174070 0.837433
+Before tuning baseline       Random Forest                              default RF; n_estimators=100; no class_weight      11.961884  0.907252           0.522388        0.103330    0.172533 0.811536
 
 Best BEFORE tuning baseline:
 Group: Before tuning baseline
 Model: Decision Tree
 Params: default tree; no class_weight
-Accuracy: 0.8482
-Precision class 1: 0.2327
-Recall class 1: 0.2707
-F1 class 1: 0.2502
-ROC AUC: 0.5894
-Training seconds: 3.73
+Accuracy: 0.8479
+Precision class 1: 0.2318
+Recall class 1: 0.2701
+F1 class 1: 0.2495
+ROC AUC: 0.5890
+Training seconds: 3.82
 
 Worst BEFORE tuning baseline:
 Group: Before tuning baseline
 Model: Random Forest
 Params: default RF; n_estimators=100; no class_weight
-Accuracy: 0.9066
-Precision class 1: 0.5051
-Recall class 1: 0.1000
-F1 class 1: 0.1670
-ROC AUC: 0.8116
-Training seconds: 25.47
+Accuracy: 0.9073
+Precision class 1: 0.5224
+Recall class 1: 0.1033
+F1 class 1: 0.1725
+ROC AUC: 0.8115
+Training seconds: 11.96
 
 Best AFTER tuning:
 Group: After tuning
 Model: Random Forest
 Params: n_estimators=100; max_depth=16; min_samples_leaf=20; class_weight=balanced
 Accuracy: 0.7611
-Precision class 1: 0.2459
-Recall class 1: 0.7517
-F1 class 1: 0.3706
-ROC AUC: 0.8353
-Training seconds: 17.83
+Precision class 1: 0.2458
+Recall class 1: 0.7506
+F1 class 1: 0.3703
+ROC AUC: 0.8356
+Training seconds: 8.94
 
 Worst AFTER tuning:
 Group: After tuning
@@ -62,29 +62,29 @@ Precision class 1: 0.2143
 Recall class 1: 0.8004
 F1 class 1: 0.3381
 ROC AUC: 0.8223
-Training seconds: 2.16
+Training seconds: 1.94
 
 Final selected model:
 Group: After tuning
 Model: Random Forest
 Params: n_estimators=100; max_depth=16; min_samples_leaf=20; class_weight=balanced
 Accuracy: 0.7611
-Precision class 1: 0.2459
-Recall class 1: 0.7517
-F1 class 1: 0.3706
-ROC AUC: 0.8353
-Training seconds: 17.83
+Precision class 1: 0.2458
+Recall class 1: 0.7506
+F1 class 1: 0.3703
+ROC AUC: 0.8356
+Training seconds: 8.94
 
 Final Test Metrics:
-Accuracy: 0.7634292155194324
-Precision class 1: 0.2483860931788131
-Recall class 1: 0.7542512990080302
-F1 class 1: 0.3737054590135159
-ROC AUC: 0.8384761362748
+Accuracy: 0.7635507718829081
+Precision class 1: 0.24823772247536707
+Recall class 1: 0.7527161076995749
+F1 class 1: 0.37334895299458193
+ROC AUC: 0.8382176779116588
 
 Final Test Confusion Matrix:
-[[62698 19327]
- [ 2081  6387]]
+[[62722 19303]
+ [ 2094  6374]]
 
 Final Test Classification Report:
               precision    recall  f1-score   support
