@@ -8,7 +8,7 @@ import streamlit as st
 API_URL = "http://127.0.0.1:8000"
 PROFILE_FILE = Path("saved_profiles.json")
 
-st.set_page_config(page_title="BRFSS Heart Risk & Diet AI", layout="wide")
+st.set_page_config(page_title="BRFSS Heart Risk & Diet AI 🫀", layout="wide")
 
 
 st.sidebar.header("Configuration")

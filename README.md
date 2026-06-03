@@ -1,250 +1,435 @@
-# 🫀 Heart Disease Prediction & AI Diet Assistant
+# Heart Disease Risk Predictor & Diet Assistant AI
 
-<p align="center">
-  <img src="https://img.shields.io/badge/python-3.9+-blue.svg" alt="Python"/>
-  <img src="https://img.shields.io/badge/Streamlit-latest-red.svg" alt="Streamlit"/>
-  <img src="https://img.shields.io/badge/Machine%20Learning-MLflow-green.svg" alt="MLflow"/>
-  <img src="https://img.shields.io/badge/GenAI-LangChain%20%2B%20Groq-orange.svg" alt="GenAI"/>
-  <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"/>
-</p>
+A machine learning health application that estimates heart disease risk from BRFSS-style health, demographic, lifestyle, and chronic-condition survey inputs. The app also includes an AI assistant layer that can generate diet suggestions, risk explanations, lifestyle guidance, and a doctor's-note style summary.
 
-<p align="center">
-  <strong>A full-stack AI-powered healthcare application for heart disease prediction and personalized diet & lifestyle guidance.</strong>
-</p>
-
-<p align="center">
-  <a href="https://heart-diseasefrontend-5a7a8554af50.herokuapp.com/">🌐 Live App</a> •
-  <a href="#-features">✨ Features</a> •
-  <a href="#-architecture">🏗️ Architecture</a> •
-  <a href="#-tech-stack">🛠️ Tech Stack</a> •
-  <a href="#-quick-start">🚀 Quick Start</a>
-</p>
+> **Medical disclaimer:** This project is for educational use only. It does not diagnose disease, replace a clinician, or provide emergency medical care.
 
 ---
 
-## 🎯 Overview
+## Project Summary
 
-<p align="center">
-  <img src="https://github.com/user-attachments/assets/b70c4e38-0ab6-4368-a248-348351cab3db" width="900" />
-</p>
+This project focuses on predicting whether a user is likely to be in the heart disease risk class using BRFSS survey-derived features. The model was trained on `brfss_2024_eda_processed.csv`, with `HadHeartDisease` as the target variable.
 
-This project is a production-style **Streamlit web application** that predicts heart disease risk using machine learning models and enhances the experience with **AI-powered diet, lifestyle, and medical recommendations**.
+The project combines:
 
-It combines:
-
-* Classical ML for medical risk prediction
-* Experiment tracking with MLflow
-* Generative AI for personalized healthcare guidance
-* A clean, interactive Streamlit frontend
-
-Built during **May–July**, with focus on real-world usability and deployment readiness.
+- A BRFSS-trained binary classification model
+- A preprocessing pipeline saved as a pickle artifact
+- A Streamlit/FastAPI app interface
+- A Groq-powered chatbot and recommendation layer
+- Generated outputs for diet plans, risk reports, lifestyle advice, and doctor-note summaries
 
 ---
 
-## ✨ Key Features
+## Data
 
-### 🔍 Heart Disease Risk Prediction
+The model uses BRFSS 2024 processed survey data. BRFSS captures health behavior, chronic condition, demographic, and lifestyle information across the United States.
 
-* Predicts likelihood of heart disease using medical attributes:
-  age, cholesterol, blood pressure, chest pain type, ECG results, and more.
-* Trained and evaluated multiple models:
+### Target Variable
 
-  * Random Forest
-  * XGBoost
-  * CatBoost
-* MLflow used for:
+The prediction target is:
 
-  * Experiment tracking
-  * Model comparison
-  * Model registry
+- `HadHeartDisease`
+  - `Yes` mapped to `1`
+  - `No` mapped to `0`
 
-### 📊 Data & Insights
+The task is binary classification:
 
-* End-to-end ML pipeline:
-
-  * Data collection
-  * Preprocessing
-  * Exploratory Data Analysis (EDA)
-  * Feature engineering
-* Interactive visualizations:
-
-  * Feature importance
-  * Prediction insights
-* Visual tools:
-
-  * Matplotlib
-  * Plotly
-
-### 🧠 AI-Powered Diet & Lifestyle Assistant
-
-* Integrated **Groq LLaMA 3 (70B)** via LangChain for:
-
-  * Personalized diet plans
-  * Heart-risk reports
-  * Lifestyle improvement suggestions
-  * Doctor’s note drafting
-  * Interactive health chatbot
-* Supports **multilingual responses** for accessibility.
-
-### 🥗 Personalized Diet Plan Generator
-
-* Customized meal plans:
-
-  * Breakfast
-  * Lunch
-  * Dinner
-* Heart-friendly food recommendations
-* Foods to avoid based on risk profile
-* One-click **PDF download** using FPDF.
-
-### 💬 Chatbot Diet Assistant
-
-* Sidebar chatbot for real-time interaction
-* Context-aware and memory-enabled conversations
-* Designed for nutrition and heart-health queries.
-
-### 🔒 Secure Data Handling
-
-* Patient data stored using **MySQL**
-* Environment variables managed with **dotenv**
-* Sensitive credentials never hard-coded.
+- `1` = had heart disease / higher heart disease risk class
+- `0` = no heart disease / lower heart disease risk class
 
 ---
 
-## 🏗️ Architecture
+## BRFSS Features Used
 
-```
-User Input (Streamlit UI)
-        ↓
-Data Preprocessing & Validation
-        ↓
-ML Models (RF / XGBoost / CatBoost)
-        ↓
-Prediction Output + Risk Score
-        ↓
-AI Layer (LangChain + Groq LLaMA 3)
-        ↓
-Diet Plan | Lifestyle Advice | Chatbot | PDF Report
+The final BRFSS training script uses 24 input features.
+
+### Demographics and socioeconomic variables
+
+- `Sex`
+- `AgeCategory`
+- `Education`
+- `Income`
+- `EmploymentStatus`
+- `MaritalStatus`
+- `HomeOwnership`
+
+### General health and body measures
+
+- `GeneralHealth`
+- `GoodOrBetterHealth`
+- `LastCheckup`
+- `Height`
+- `Weight`
+
+### Health behaviors
+
+- `Smoked100Cigarettes`
+- `SmokerStatus`
+- `ECigaretteUsage`
+- `SmokelessTobaccoUse`
+- `AlcoholDays`
+- `PhysicalActivities`
+
+### Existing conditions and comorbidities
+
+- `HadDiabetes`
+- `HadKidneyDisease`
+- `HadStroke`
+- `HadCOPD`
+- `HadDepressiveDisorder`
+- `HadArthritis`
+
+These features were chosen because the project EDA found that smoking status, physical activity, alcohol use, diabetes, stroke, other comorbidities, and socioeconomic variables were important indicators of heart disease risk.
+
+---
+
+## Machine Learning Pipeline
+
+The current BRFSS model is trained using `train_brfss_option_b.py`.
+
+### 1. Data loading
+
+The script loads:
+
+```text
+brfss_2024_eda_processed.csv
 ```
 
-MLflow runs alongside the pipeline to track metrics, parameters, and models.
+It keeps only the selected BRFSS feature columns and the `HadHeartDisease` target column.
+
+### 2. Target conversion
+
+The target is converted from text labels to binary labels:
+
+```text
+Yes -> 1
+No  -> 0
+```
+
+Rows with missing target values are removed.
+
+### 3. Train/validation/test split
+
+The dataset is split with stratification to preserve the heart disease class distribution:
+
+- 60% training
+- 20% validation
+- 20% test
+
+The validation set is used for model selection. The test set is only used for final evaluation.
+
+### 4. Preprocessing
+
+The preprocessing pipeline uses a `ColumnTransformer` with separate numeric and categorical pipelines.
+
+Numeric pipeline:
+
+```text
+SimpleImputer(strategy="median")
+StandardScaler()
+```
+
+Categorical pipeline:
+
+```text
+SimpleImputer(strategy="most_frequent")
+OneHotEncoder(handle_unknown="ignore")
+```
+
+The trained preprocessor is saved as:
+
+```text
+artifacts/preprocessor.pkl
+artifact/preprocessor.pkl
+```
+
+### 5. Model training
+
+The project compares untuned baseline models against tuned models with class imbalance handling.
+
+Baseline models:
+
+- Logistic Regression
+- Decision Tree
+- Random Forest
+- Gradient Boosting
+
+Tuned models:
+
+- Logistic Regression with `class_weight="balanced"`
+- Decision Tree with limited depth and `class_weight="balanced"`
+- Random Forest with `class_weight="balanced"`
+- Gradient Boosting with balanced sample weights
+
+### 6. Model selection
+
+The dataset is imbalanced, so the final model is not selected by accuracy alone. The selection priority is:
+
+1. F1-score for the positive heart disease class
+2. Recall for the positive heart disease class
+3. Precision for the positive heart disease class
+4. ROC-AUC
+
+This matters because a high-accuracy model can still miss many positive heart disease cases.
 
 ---
 
-## 🛠️ Tech Stack
+## Final Selected Model
 
-| Layer               | Technology                      |
-| ------------------- | ------------------------------- |
-| Language            | Python 3.9+                     |
-| Frontend            | Streamlit                       |
-| ML Models           | Scikit-learn, XGBoost, CatBoost |
-| Experiment Tracking | MLflow                          |
-| Visualization       | Matplotlib, Plotly              |
-| GenAI               | LangChain + Groq LLaMA 3 (70B)  |
-| Database            | MySQL                           |
-| PDF Export          | FPDF                            |
-| Config Management   | python-dotenv                   |
-| Deployment          | Heroku                          |
+The final selected model is a tuned Random Forest classifier.
+
+```text
+Model: Random Forest
+n_estimators: 100
+max_depth: 16
+min_samples_leaf: 20
+class_weight: balanced
+```
+
+The final model is saved as:
+
+```text
+artifacts/model.pkl
+```
 
 ---
 
-## 🚀 Quick Start
+## Evaluation Results
 
-### Prerequisites
+### Validation performance
 
-* Python 3.9+
-* MySQL
-* Groq API key
+```text
+Accuracy:          0.7611
+Precision class 1: 0.2458
+Recall class 1:    0.7506
+F1 class 1:        0.3703
+ROC-AUC:           0.8356
+```
 
-### Installation
+### Final test performance
+
+```text
+Accuracy:          0.7636
+Precision class 1: 0.2482
+Recall class 1:    0.7527
+F1 class 1:        0.3733
+ROC-AUC:           0.8382
+```
+
+### Final test confusion matrix
+
+```text
+                  Predicted No   Predicted Yes
+Actual No              62,722          19,303
+Actual Yes              2,094           6,374
+```
+
+The model has strong recall for the heart disease class, meaning it catches many positive cases. The tradeoff is lower precision, which means it also produces more false positives.
+
+---
+
+## Architecture
+
+The project presentation describes the system as a two-stage architecture: a clinical prediction stage and a BRFSS/lifestyle adjustment stage. The current codebase contains both the older UCI-style clinical pipeline pieces and the newer BRFSS training script.
+
+Add this image to the repo as `docs/pipeline_architecture.png`, then include it in the README:
+
+```markdown
+![Two-stage pipeline](docs/pipeline_architecture.png)
+```
+
+![Two-stage pipeline](docs/pipeline_architecture.png)
+
+### Current code architecture
+
+```text
+User input
+   ↓
+Streamlit frontend
+   ↓
+FastAPI backend
+   ↓
+Preprocessing pipeline
+   ↓
+Random Forest BRFSS model
+   ↓
+Risk prediction
+   ↓
+Groq AI assistant layer
+   ↓
+Diet plan, risk report, lifestyle advice, doctor note, chatbot response
+```
+
+---
+
+## App Features
+
+The application includes:
+
+- Heart disease risk prediction
+- Diet plan generation
+- Risk report generation
+- Lifestyle advice
+- Doctor's-note style summary
+- Sidebar chatbot
+- Multilingual response support
+
+The AI assistant uses Groq chat completions to generate natural-language responses from the user profile and prediction result.
+
+---
+
+## Tech Stack
+
+- Python
+- Pandas
+- NumPy
+- Scikit-learn
+- Streamlit
+- FastAPI
+- Groq API
+- FPDF
+- python-dotenv
+- Matplotlib
+- MLflow
+
+---
+
+## Project Structure
+
+```text
+111project/
+├── artifacts/
+│   ├── model.pkl
+│   ├── preprocessor.pkl
+│   ├── brfss_final_training_report.txt
+│   ├── brfss_test_confusion_matrix.png
+│   ├── brfss_test_roc_curve.png
+│   └── validation metric plots
+├── artifact/
+│   └── preprocessor.pkl
+├── backend/
+│   ├── app.py
+│   ├── main.py
+│   └── src/
+├── frontend-deploy/
+│   └── streamlit_app.py
+├── src/
+│   └── mlproject/
+├── brfss_2024_eda_processed.csv
+├── train_brfss_option_b.py
+├── app.py
+├── main.py
+├── streamlit_app.py
+└── README.md
+```
+
+---
+
+## How to Run
+
+### 1. Clone the repository
 
 ```bash
-# Clone the repository
-git clone https://github.com/your-username/heart-disease-ai.git
-cd heart-disease-ai
+git clone https://github.com/msbisrat/111project.git
+cd 111project
+```
 
-# Create virtual environment
+### 2. Switch to the project branch
+
+```bash
+git switch final-final-zip
+```
+
+### 3. Create and activate a virtual environment
+
+```bash
 python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
+source .venv/bin/activate
+```
 
-# Install dependencies
+On Windows:
+
+```bash
+.venv\Scripts\activate
+```
+
+### 4. Install dependencies
+
+```bash
 pip install -r requirements.txt
 ```
 
-### Environment Variables
+### 5. Create a `.env` file
 
-Create a `.env` file:
-
-```
+```env
 GROQ_API_KEY=your_groq_api_key
-MYSQL_HOST=localhost
-MYSQL_USER=root
-MYSQL_PASSWORD=your_password
-MYSQL_DB=heart_disease
 ```
 
-### Run the App
+### 6. Train the BRFSS model
 
 ```bash
-streamlit run app.py
+python train_brfss_option_b.py
+```
+
+This creates or updates the model, preprocessor, report, and evaluation plots in the `artifacts/` folder.
+
+### 7. Run the app
+
+Depending on which app entry point you are using:
+
+```bash
+streamlit run streamlit_app.py
+```
+
+or:
+
+```bash
+streamlit run frontend-deploy/streamlit_app.py
+```
+
+If using the FastAPI backend separately:
+
+```bash
+uvicorn backend.app:app --reload
 ```
 
 ---
 
-## 📸 Screenshots
+## Important Implementation Notes
 
-### Heart Disease Predictor
+The repository contains both the original UCI-style clinical heart disease pipeline and the newer BRFSS-based model work.
 
-![Predictor](https://github.com/user-attachments/assets/b70c4e38-0ab6-4368-a248-348351cab3db)
+The current BRFSS training script uses BRFSS survey features such as demographics, lifestyle behavior, and comorbidities. Some app UI fields still look like the older UCI clinical dataset inputs, such as chest pain type, cholesterol, ECG results, ST depression, and thalassemia.
 
-### Personalized Diet Plan
-
-![Diet](https://github.com/user-attachments/assets/eef71d7a-f9a0-411e-8cf4-84407374ebe1)
-
-### AI Diet Assistant Chatbot
-
-![Chatbot](https://github.com/user-attachments/assets/3d2d62d0-7ee2-4004-85d0-748feac111f6)
+Because of this, one important future improvement is to align the frontend form fields fully with the 24 BRFSS features used by the final model.
 
 ---
 
-## 📅 Development Timeline
+## Limitations
 
-* May: Data analysis, ML model training, MLflow integration
-* June: Streamlit UI, prediction pipeline, visualizations
-* July: GenAI integration, chatbot, PDF export, deployment
-
----
-
-## 🔮 Future Enhancements
-
-* Medical report explanation with citations
-* Wearable device data integration
-* Doctor dashboard for patient monitoring
-* Mobile-friendly UI improvements
-* Expanded multilingual support
+- The dataset is imbalanced.
+- The final model improves recall for heart disease cases but has low precision.
+- More false positives are expected because the model is optimized to catch more positive cases.
+- Some UI inputs may not map directly to the current BRFSS model features.
+- Survey data may contain self-reporting errors.
+- The AI assistant can generate helpful summaries, but it is not a medical authority.
+- The project is not a diagnostic tool.
 
 ---
 
-## 👨‍💻 Author
+## Future Work
 
-Vivek Kumar Gupta
-AI Engineering Student | Building real-world ML & GenAI products
-
-GitHub: [https://github.com/vivek34561](https://github.com/vivek34561)
-LinkedIn: [https://linkedin.com/in/vivek-gupta-0400452b6](https://linkedin.com/in/vivek-gupta-0400452b6)
-Portfolio: [https://resume-sepia-seven.vercel.app/](https://resume-sepia-seven.vercel.app/)
-
----
-
-## 📄 License
-
-MIT License © 2025 Vivek Kumar Gupta
+- Align the frontend inputs with the exact BRFSS feature list.
+- Add feature importance or SHAP explanations.
+- Improve precision while maintaining strong recall.
+- Add better medical safety guardrails to the chatbot.
+- Add wearable data such as heart rate, sleep, and respiratory rate.
+- Add nutrition tracking inputs.
+- Improve validation on additional datasets.
+- Add clearer documentation for the older UCI pipeline versus the newer BRFSS pipeline.
 
 ---
 
-If you want, next I can:
+## Authors
 
-* Add a polished badges-only header version
-* Optimize this README for recruiters
-* Convert this into a case-study style project description
-* Create a short “Why this project matters” section for interviews
+Course project by the 111project team.
