@@ -16,8 +16,8 @@ language = st.sidebar.selectbox(
     ["English", "Hindi", "Spanish", "Tamil", "Bengali"],
 )
 
-st.title("BRFSS Heart Disease Risk Predictor & Diet Assistant")
-st.caption("Option B: prediction uses BRFSS features only, not the old UCI clinical fields.")
+st.title("Heart Disease Risk Predictor & Diet Assistant")
+st.caption("A model that uses CDC lifestyle factors from BRFSS data to predict health status.")
 
 
 def load_profiles():
@@ -113,7 +113,7 @@ EDUCATION_OPTIONS = {
     "High school graduate / GED": 4.0,
     "Some college or technical school": 5.0,
     "College graduate": 6.0,
-    "Refused / unknown": 9.0,
+    "Decline to state": 9.0,
 }
 
 INCOME_OPTIONS = {
@@ -129,7 +129,7 @@ INCOME_OPTIONS = {
     "$150,000 to < $200,000": 10.0,
     "$200,000 or more": 11.0,
     "Don't know": 77.0,
-    "Refused": 99.0,
+    "Decline to state": 99.0,
 }
 
 EMPLOYMENT_OPTIONS = {
@@ -141,7 +141,7 @@ EMPLOYMENT_OPTIONS = {
     "Student": 6.0,
     "Retired": 7.0,
     "Unable to work": 8.0,
-    "Refused": 9.0,
+    "Decline to state": 9.0,
 }
 
 MARITAL_OPTIONS = {
@@ -151,7 +151,7 @@ MARITAL_OPTIONS = {
     "Separated": 4.0,
     "Never married": 5.0,
     "Unmarried couple": 6.0,
-    "Refused": 9.0,
+    "Decline to state": 9.0,
 }
 
 HOME_OPTIONS = {
@@ -159,7 +159,7 @@ HOME_OPTIONS = {
     "Rent": 2.0,
     "Other arrangement": 3.0,
     "Don't know": 7.0,
-    "Refused": 9.0,
+    "Decline to state": 9.0,
 }
 
 GENERAL_HEALTH_OPTIONS = {
@@ -169,14 +169,14 @@ GENERAL_HEALTH_OPTIONS = {
     "Fair": 4.0,
     "Poor": 5.0,
     "Don't know": 7.0,
-    "Refused": 9.0,
+    "Decline to state": 9.0,
 }
 
 YES_NO_CODE_OPTIONS = {
     "Yes": 1.0,
     "No": 2.0,
     "Don't know": 7.0,
-    "Refused": 9.0,
+    "Decline to state": 9.0,
 }
 
 LAST_CHECKUP_OPTIONS = {
@@ -186,7 +186,7 @@ LAST_CHECKUP_OPTIONS = {
     "5 or more years ago": 4.0,
     "Don't know": 7.0,
     "Never": 8.0,
-    "Refused": 9.0,
+    "Decline to state": 9.0,
 }
 
 SMOKER_STATUS_OPTIONS = {
@@ -194,7 +194,7 @@ SMOKER_STATUS_OPTIONS = {
     "Current smoker - some days": 2.0,
     "Former smoker": 3.0,
     "Never smoked": 4.0,
-    "Don't know / refused": 9.0,
+    "Decline to state": 9.0,
 }
 
 ECIG_OPTIONS = {
@@ -203,7 +203,7 @@ ECIG_OPTIONS = {
     "Not at all": 3.0,
     "Never used": 4.0,
     "Don't know": 7.0,
-    "Refused": 9.0,
+    "Decline to state": 9.0,
 }
 
 SMOKELESS_OPTIONS = {
@@ -211,7 +211,7 @@ SMOKELESS_OPTIONS = {
     "Use some days": 2.0,
     "Not at all": 3.0,
     "Don't know": 7.0,
-    "Refused": 9.0,
+    "Decline to state": 9.0,
 }
 
 YES_NO_TEXT_OPTIONS = ["Yes", "No"]
@@ -270,7 +270,6 @@ with profile_tab:
                 "MaritalStatus": MARITAL_OPTIONS,
                 "HomeOwnership": HOME_OPTIONS,
                 "GeneralHealth": GENERAL_HEALTH_OPTIONS,
-                "GoodOrBetterHealth": YES_NO_CODE_OPTIONS,
                 "LastCheckup": LAST_CHECKUP_OPTIONS,
                 "SmokerStatus": SMOKER_STATUS_OPTIONS,
                 "ECigaretteUsage": ECIG_OPTIONS,
@@ -326,45 +325,44 @@ with profile_tab:
         col1, col2 = st.columns(2)
         with col1:
             Sex = optional_select("Biological Sex", SEX_OPTIONS, key="Sex", default=loaded.get("Sex"))
-            AgeCategory = optional_select("Age Category", AGE_OPTIONS, key="AgeCategory", default=loaded.get("AgeCategory"))
-            Education = optional_select("Education", EDUCATION_OPTIONS, key="Education", default=loaded.get("Education"))
-            Income = optional_select("Income", INCOME_OPTIONS, key="Income", default=loaded.get("Income"))
+            MaritalStatus = optional_select("Marital Status (optional)", MARITAL_OPTIONS, key="MaritalStatus", default=loaded.get("MaritalStatus"))
+            EmploymentStatus = optional_select("Employment Status (optional)", EMPLOYMENT_OPTIONS, key="EmploymentStatus", default=loaded.get("EmploymentStatus"))
+            HomeOwnership = optional_select("Home Ownership (optional)", HOME_OPTIONS, key="HomeOwnership", default=loaded.get("HomeOwnership"))
 
         with col2:
-            EmploymentStatus = optional_select("Employment Status", EMPLOYMENT_OPTIONS, key="EmploymentStatus", default=loaded.get("EmploymentStatus"))
-            MaritalStatus = optional_select("Marital Status", MARITAL_OPTIONS, key="MaritalStatus", default=loaded.get("MaritalStatus"))
-            HomeOwnership = optional_select("Home Ownership", HOME_OPTIONS, key="HomeOwnership", default=loaded.get("HomeOwnership"))
-
+            AgeCategory = optional_select("Age Category", AGE_OPTIONS, key="AgeCategory", default=loaded.get("AgeCategory"))
+            Education = optional_select("Education (optional)", EDUCATION_OPTIONS, key="Education", default=loaded.get("Education"))
+            Income = optional_select("Income (optional)", INCOME_OPTIONS, key="Income", default=loaded.get("Income"))
+        
     with st.expander("General Health and Body Measures", expanded=True):
         col1, col2 = st.columns(2)
         with col1:
-            GeneralHealth = optional_select("General Health", GENERAL_HEALTH_OPTIONS, key="GeneralHealth", default=loaded.get("GeneralHealth"))
-            GoodOrBetterHealth = optional_select("Would you say your health is good or better?", YES_NO_CODE_OPTIONS, key="GoodOrBetterHealth", default=loaded.get("GoodOrBetterHealth"))
-            LastCheckup = optional_select("Last Routine Checkup", LAST_CHECKUP_OPTIONS, key="LastCheckup", default=loaded.get("LastCheckup"))
+            GeneralHealth = optional_select("How would you classify your general health?", GENERAL_HEALTH_OPTIONS, key="GeneralHealth", default=loaded.get("GeneralHealth"))
+            height_feet = optional_number("What is your height, feet part; e.g. 5 if 5'6", 3, 8, key="height_feet", default=loaded.get("height_feet", ""))
+            Weight = optional_number("What is your weight in pounds", 50, 700, key="Weight", default=loaded.get("Weight", ""))
 
         with col2:
-            height_feet = optional_number("Height feet, example 5", 3, 8, key="height_feet", default=loaded.get("height_feet", ""))
-            height_inches = optional_number("Height inches, example 4", 0, 11, key="height_inches", default=loaded.get("height_inches", ""))
+            LastCheckup = optional_select("When was your last routine checkup?", LAST_CHECKUP_OPTIONS, key="LastCheckup", default=loaded.get("LastCheckup"))
+            height_inches = optional_number("What is your height, inches part; e.g. 6 if 5'6", 0, 11, key="height_inches", default=loaded.get("height_inches", ""))
             Height = brfss_height_code(height_feet, height_inches)
-            Weight = optional_number("Weight in pounds", 50, 700, key="Weight", default=loaded.get("Weight", ""))
 
     with st.expander("Health Behaviors and Conditions", expanded=True):
         col1, col2 = st.columns(2)
         with col1:
-            Smoked100Cigarettes = optional_text_select("Smoked at least 100 cigarettes in life?", YES_NO_TEXT_OPTIONS, key="Smoked100Cigarettes", default=loaded.get("Smoked100Cigarettes"))
+            Smoked100Cigarettes = optional_text_select("Have you smoked at least 100 cigarettes in your life?", YES_NO_TEXT_OPTIONS, key="Smoked100Cigarettes", default=loaded.get("Smoked100Cigarettes"))
             SmokerStatus = optional_select("Smoker Status", SMOKER_STATUS_OPTIONS, key="SmokerStatus", default=loaded.get("SmokerStatus"))
-            ECigaretteUsage = optional_select("E-cigarette Usage", ECIG_OPTIONS, key="ECigaretteUsage", default=loaded.get("ECigaretteUsage"))
-            SmokelessTobaccoUse = optional_select("Smokeless Tobacco Use", SMOKELESS_OPTIONS, key="SmokelessTobaccoUse", default=loaded.get("SmokelessTobaccoUse"))
+            ECigaretteUsage = optional_select("How often do you use E-cigarettes?", ECIG_OPTIONS, key="ECigaretteUsage", default=loaded.get("ECigaretteUsage"))
+            SmokelessTobaccoUse = optional_select("How often do you use smokeless tobacco?", SMOKELESS_OPTIONS, key="SmokelessTobaccoUse", default=loaded.get("SmokelessTobaccoUse"))
             AlcoholDays = optional_number("Alcohol days code. 888 = no drinks, 101-107 = days/week, 201-230 = days/month", 0, 999, key="AlcoholDays", default=loaded.get("AlcoholDays", ""))
-            PhysicalActivities = optional_select("Physical Activities in past month?", YES_NO_CODE_OPTIONS, key="PhysicalActivities", default=loaded.get("PhysicalActivities"))
+            PhysicalActivities = optional_select("In the past month, have you done any physical activity outside your job?", YES_NO_CODE_OPTIONS, key="PhysicalActivities", default=loaded.get("PhysicalActivities"))
 
         with col2:
-            HadDiabetes = optional_text_select("Had Diabetes?", DIABETES_OPTIONS, key="HadDiabetes", default=loaded.get("HadDiabetes"))
-            HadKidneyDisease = optional_text_select("Had Kidney Disease?", YES_NO_TEXT_OPTIONS, key="HadKidneyDisease", default=loaded.get("HadKidneyDisease"))
-            HadStroke = optional_text_select("Had Stroke?", YES_NO_TEXT_OPTIONS, key="HadStroke", default=loaded.get("HadStroke"))
-            HadCOPD = optional_text_select("Had COPD?", YES_NO_TEXT_OPTIONS, key="HadCOPD", default=loaded.get("HadCOPD"))
-            HadDepressiveDisorder = optional_text_select("Had Depressive Disorder?", YES_NO_TEXT_OPTIONS, key="HadDepressiveDisorder", default=loaded.get("HadDepressiveDisorder"))
-            HadArthritis = optional_text_select("Had Arthritis?", YES_NO_TEXT_OPTIONS, key="HadArthritis", default=loaded.get("HadArthritis"))
+            HadDiabetes = optional_text_select("Have you been diagnosed with Diabetes?", DIABETES_OPTIONS, key="HadDiabetes", default=loaded.get("HadDiabetes"))
+            HadKidneyDisease = optional_text_select("Have you been diagnosed with Kidney Disease?", YES_NO_TEXT_OPTIONS, key="HadKidneyDisease", default=loaded.get("HadKidneyDisease"))
+            HadStroke = optional_text_select("Have you had a Stroke?", YES_NO_TEXT_OPTIONS, key="HadStroke", default=loaded.get("HadStroke"))
+            HadCOPD = optional_text_select("Have you been diagnosed with COPD?", YES_NO_TEXT_OPTIONS, key="HadCOPD", default=loaded.get("HadCOPD"))
+            HadDepressiveDisorder = optional_text_select("Have you been diagnosed with Depressive Disorder?", YES_NO_TEXT_OPTIONS, key="HadDepressiveDisorder", default=loaded.get("HadDepressiveDisorder"))
+            HadArthritis = optional_text_select("Have you been diagnosed with Arthritis?", YES_NO_TEXT_OPTIONS, key="HadArthritis", default=loaded.get("HadArthritis"))
 
     st.markdown("### Extra Context for AI Recommendations Only")
     st.caption("These fields are not used directly by the BRFSS ML prediction.")
@@ -372,24 +370,24 @@ with profile_tab:
     with st.expander("Wearable, Nutrition, and Symptoms", expanded=False):
         col1, col2 = st.columns(2)
         with col1:
-            gender = st.text_input("Gender optional", value=loaded.get("gender", "") or "", placeholder="Leave blank if unknown", key="gender")
-            job = st.text_input("Job optional", value=loaded.get("job", "") or "", placeholder="Example: student, office worker", key="job")
+            gender = st.text_input("Gender (optional)", value=loaded.get("gender", "") or "", placeholder="Leave blank if unknown", key="gender")
+            job = st.text_input("Job (optional)", value=loaded.get("job", "") or "", placeholder="Example: student, office worker", key="job")
             height_cm = optional_number("Height cm optional", 80, 250, step=0.1, key="height_cm", default=loaded.get("height_cm", ""))
             weight_kg = optional_number("Weight kg optional", 20, 300, step=0.1, key="weight_kg", default=loaded.get("weight_kg", ""))
-            avg_heart_rate = optional_number("Average heart rate bpm", 30, 220, step=0.1, key="avg_heart_rate", default=loaded.get("avg_heart_rate", ""))
-            resting_heart_rate = optional_number("Resting heart rate bpm", 30, 180, step=0.1, key="resting_heart_rate", default=loaded.get("resting_heart_rate", ""))
+            avg_heart_rate = optional_number("Average heart rate, bpm", 30, 220, step=0.1, key="avg_heart_rate", default=loaded.get("avg_heart_rate", ""))
+            resting_heart_rate = optional_number("Resting heart rate, bpm", 30, 180, step=0.1, key="resting_heart_rate", default=loaded.get("resting_heart_rate", ""))
 
         with col2:
-            sleep_hours = optional_number("Sleeping time hours per night", 0, 24, step=0.1, key="sleep_hours", default=loaded.get("sleep_hours", ""))
-            respiratory_rate = optional_number("Respiratory rate breaths per minute", 5, 40, step=0.1, key="respiratory_rate", default=loaded.get("respiratory_rate", ""))
-            calories_per_day = optional_number("Calories per day", 0, 10000, step=0.1, key="calories_per_day", default=loaded.get("calories_per_day", ""))
+            sleep_hours = optional_number("Average number of hours of sleep per night", 0, 24, step=0.1, key="sleep_hours", default=loaded.get("sleep_hours", ""))
+            respiratory_rate = optional_number("Respiratory rate, breaths per minute", 5, 40, step=0.1, key="respiratory_rate", default=loaded.get("respiratory_rate", ""))
+            calories_per_day = optional_number("Average calories consumed per day", 0, 10000, step=0.1, key="calories_per_day", default=loaded.get("calories_per_day", ""))
             protein_g = optional_number("Protein grams per day", 0, 500, step=0.1, key="protein_g", default=loaded.get("protein_g", ""))
             carbs_g = optional_number("Carbs grams per day", 0, 1000, step=0.1, key="carbs_g", default=loaded.get("carbs_g", ""))
             fat_g = optional_number("Fat grams per day", 0, 500, step=0.1, key="fat_g", default=loaded.get("fat_g", ""))
             water_liters = optional_number("Water liters per day", 0, 20, step=0.1, key="water_liters", default=loaded.get("water_liters", ""))
 
         symptoms = st.text_area(
-            "Describe symptoms or concerns optional",
+            "Describe symptoms or concerns (optional)",
             value=loaded.get("symptoms", "") or "",
             placeholder="Example: chest tightness, fatigue, shortness of breath, poor sleep...",
             key="symptoms"
@@ -405,7 +403,6 @@ with profile_tab:
         "MaritalStatus": MaritalStatus,
         "HomeOwnership": HomeOwnership,
         "GeneralHealth": GeneralHealth,
-        "GoodOrBetterHealth": GoodOrBetterHealth,
         "LastCheckup": LastCheckup,
         "Height": Height,
         "height_feet": height_feet,

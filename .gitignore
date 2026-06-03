@@ -18,6 +18,7 @@ data/raw/
 data/processed/
 
 # Dataset files
+*.csv
 
 # Trained models
 models/*.pkl
