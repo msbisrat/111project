@@ -372,8 +372,8 @@ with profile_tab:
         with col1:
             gender = st.text_input("Gender (optional)", value=loaded.get("gender", "") or "", placeholder="Leave blank if unknown", key="gender")
             job = st.text_input("Job (optional)", value=loaded.get("job", "") or "", placeholder="Example: student, office worker", key="job")
-            height_cm = optional_number("Height cm optional", 80, 250, step=0.1, key="height_cm", default=loaded.get("height_cm", ""))
-            weight_kg = optional_number("Weight kg optional", 20, 300, step=0.1, key="weight_kg", default=loaded.get("weight_kg", ""))
+            height_cm = optional_number("Height cm (optional)", 80, 250, step=0.1, key="height_cm", default=loaded.get("height_cm", ""))
+            weight_kg = optional_number("Weight kg (optional)", 20, 300, step=0.1, key="weight_kg", default=loaded.get("weight_kg", ""))
             avg_heart_rate = optional_number("Average heart rate, bpm", 30, 220, step=0.1, key="avg_heart_rate", default=loaded.get("avg_heart_rate", ""))
             resting_heart_rate = optional_number("Resting heart rate, bpm", 30, 180, step=0.1, key="resting_heart_rate", default=loaded.get("resting_heart_rate", ""))
 
@@ -381,10 +381,10 @@ with profile_tab:
             sleep_hours = optional_number("Average number of hours of sleep per night", 0, 24, step=0.1, key="sleep_hours", default=loaded.get("sleep_hours", ""))
             respiratory_rate = optional_number("Respiratory rate, breaths per minute", 5, 40, step=0.1, key="respiratory_rate", default=loaded.get("respiratory_rate", ""))
             calories_per_day = optional_number("Average calories consumed per day", 0, 10000, step=0.1, key="calories_per_day", default=loaded.get("calories_per_day", ""))
-            protein_g = optional_number("Protein grams per day", 0, 500, step=0.1, key="protein_g", default=loaded.get("protein_g", ""))
-            carbs_g = optional_number("Carbs grams per day", 0, 1000, step=0.1, key="carbs_g", default=loaded.get("carbs_g", ""))
-            fat_g = optional_number("Fat grams per day", 0, 500, step=0.1, key="fat_g", default=loaded.get("fat_g", ""))
-            water_liters = optional_number("Water liters per day", 0, 20, step=0.1, key="water_liters", default=loaded.get("water_liters", ""))
+            protein_g = optional_number("Protein, grams per day", 0, 500, step=0.1, key="protein_g", default=loaded.get("protein_g", ""))
+            carbs_g = optional_number("Carbs, grams per day", 0, 1000, step=0.1, key="carbs_g", default=loaded.get("carbs_g", ""))
+            fat_g = optional_number("Fat, grams per day", 0, 500, step=0.1, key="fat_g", default=loaded.get("fat_g", ""))
+            water_liters = optional_number("Water, liters per day", 0, 20, step=0.1, key="water_liters", default=loaded.get("water_liters", ""))
 
         symptoms = st.text_area(
             "Describe symptoms or concerns (optional)",
