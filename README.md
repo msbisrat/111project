@@ -56,10 +56,8 @@ Make sure you have the following installed:
 
 5. **Download the data files**
 
-   Download the following files from [Shared Drive](https://drive.google.com/drive/folders/1Do-WD_58u01GXPyg8ScpCBZtyY61Kdw6?usp=sharing) and place them in the project root:
+   Download the following file from [Shared Drive](https://drive.google.com/drive/folders/1Do-WD_58u01GXPyg8ScpCBZtyY61Kdw6?usp=sharing) and place them in the project root:
    - `brfss_survey_data_processed.csv`
-   - `notebook/data/cleaned_data.csv`
-     - Ensure this file is in /notebook/data
 
 6. **Run the training pipeline** (generates `artifact/model.pkl` and `artifact/preprocessor.pkl`)
 ```bash
