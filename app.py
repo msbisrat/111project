@@ -1,334 +1,365 @@
-import io
-import unicodedata
-import pickle
-import pandas as pd
+"""
+app.py
+------
+FastAPI backend for the Personalised Heart Disease Risk Chatbot.
+Built on the BRFSS-only model with LLM-powered recommendations.
+"""
+
+import os
+import sys
+from typing import Optional
+
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from typing import Optional
-from fpdf import FPDF
 from groq import Groq
-import os
-import uvicorn
-import sys
 
-# Ensure project root is on sys.path for importing src.* reliably
 PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from src.mlproject.predict_pipelines import PredictPipeline
 
-# Load environment variables
 load_dotenv()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
-client = Groq(api_key=GROQ_API_KEY)
+app = FastAPI(title="BRFSS Heart Disease Predictor")
 
-# --------------------- FastAPI Setup ---------------------
-app = FastAPI(title="🪀 Heart Disease Predictor & Diet Assistant")
+MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
 
-# --------------------- Request Schemas ---------------------
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SCHEMAS
+# ══════════════════════════════════════════════════════════════════════════════
+
 class HealthProfile(BaseModel):
-    # Basic information
-    age: Optional[int] = None
-    sex: Optional[str] = None
-    gender: Optional[str] = None
-    job: Optional[str] = None
-    weight_kg: Optional[float] = None
-    height_cm: Optional[float] = None
+    # ── BRFSS prediction features ──────────────────────────────────────────────
+    Sex:                  Optional[float] = None
+    AgeCategory:          Optional[float] = None
+    Education:            Optional[float] = None
+    Income:               Optional[float] = None
+    EmploymentStatus:     Optional[float] = None
+    MaritalStatus:        Optional[float] = None
+    HomeOwnership:        Optional[float] = None
+    GeneralHealth:        Optional[float] = None
+    GoodOrBetterHealth:   Optional[float] = None
+    LastCheckup:          Optional[float] = None
+    Height:               Optional[float] = None
+    Weight:               Optional[float] = None
+    Smoked100Cigarettes:  Optional[str]   = None
+    SmokerStatus:         Optional[float] = None
+    ECigaretteUsage:      Optional[float] = None
+    SmokelessTobaccoUse:  Optional[float] = None
+    AlcoholDays:          Optional[float] = None
+    PhysicalActivities:   Optional[float] = None
+    HadAngina:            Optional[str]   = None   # added — strong predictor
+    HadDiabetes:          Optional[str]   = None
+    HadKidneyDisease:     Optional[str]   = None
+    HadStroke:            Optional[str]   = None
+    HadCOPD:              Optional[str]   = None
+    HadDepressiveDisorder:Optional[str]   = None
+    HadArthritis:         Optional[str]   = None
 
-    # Original heart disease model features
-    cp: Optional[str] = None
-    trestbps: Optional[int] = None
-    chol: Optional[int] = None
-    fbs: Optional[str] = None
-    restecg: Optional[str] = None
-    thalach: Optional[int] = None
-    exang: Optional[str] = None
-    oldpeak: Optional[float] = None
-    slope: Optional[str] = None
-    ca: Optional[int] = None
-    thal: Optional[str] = None
+    # ── Extra context for AI recommendations only ──────────────────────────────
+    username:          Optional[str]   = None
+    gender:            Optional[str]   = None
+    job:               Optional[str]   = None
+    height_cm:         Optional[float] = None
+    weight_kg:         Optional[float] = None
+    avg_heart_rate:    Optional[float] = None
+    resting_heart_rate:Optional[float] = None
+    sleep_hours:       Optional[float] = None
+    respiratory_rate:  Optional[float] = None
+    calories_per_day:  Optional[float] = None
+    protein_g:         Optional[float] = None
+    carbs_g:           Optional[float] = None
+    fat_g:             Optional[float] = None
+    water_liters:      Optional[float] = None
+    symptoms:          Optional[str]   = None
 
-    # Wearable data
-    avg_heart_rate: Optional[float] = None
-    resting_heart_rate: Optional[float] = None
-    sleep_hours: Optional[float] = None
-    respiratory_rate: Optional[float] = None
-
-    # Nutritional data
-    calories_per_day: Optional[float] = None
-    protein_g: Optional[float] = None
-    carbs_g: Optional[float] = None
-    fat_g: Optional[float] = None
-    water_liters: Optional[float] = None
-
-    # User-reported symptoms
-    symptoms: Optional[str] = None
 
 class ChatRequest(BaseModel):
-    message: str
+    message:  str
     language: str = "English"
-def safe_index(value, options):
-    if value is None or value == "I don't know":
-        return None
-    return options.index(value)
 
-def yes_no_to_int(value):
-    if value is None or value == "I don't know":
-        return None
-    return 1 if value == "Yes" else 0
 
-def sex_to_int(value):
-    if value is None or value == "I don't know":
-        return None
-    return 1 if value == "Male" else 0
+# ══════════════════════════════════════════════════════════════════════════════
+# HELPERS
+# ══════════════════════════════════════════════════════════════════════════════
 
-def build_patient_context(profile: HealthProfile):
-    return f"""
-Additional patient information:
+def require_groq_client():
+    if client is None:
+        raise HTTPException(
+            status_code=500,
+            detail="GROQ_API_KEY is missing. Please add it to your .env file."
+        )
+    return client
 
-Basic information:
-Age: {profile.age}
-Biological sex: {profile.sex}
-Gender: {profile.gender}
-Job: {profile.job}
-Weight kg: {profile.weight_kg}
-Height cm: {profile.height_cm}
+def na(value, fallback="Not provided"):
+    return str(value) if value is not None else fallback
 
-Wearable data:
-Average heart rate: {profile.avg_heart_rate}
-Resting heart rate: {profile.resting_heart_rate}
-Sleep hours: {profile.sleep_hours}
-Respiratory rate: {profile.respiratory_rate}
-
-Nutrition data:
-Calories per day: {profile.calories_per_day}
-Protein grams per day: {profile.protein_g}
-Carbs grams per day: {profile.carbs_g}
-Fat grams per day: {profile.fat_g}
-Water liters per day: {profile.water_liters}
-
-User-reported symptoms:
-{profile.symptoms}
-"""
-
-# --------------------- Translator ---------------------
 def translate_text(text: str, target_language: str) -> str:
     if target_language == "English":
         return text
-    response = client.chat.completions.create(
-        model="openai/gpt-oss-120b",
+    groq_client = require_groq_client()
+    response = groq_client.chat.completions.create(
+        model=MODEL,
         messages=[
-            {"role": "system", "content": "You are a helpful translator."},
-            {"role": "user", "content": f"Translate this to {target_language}:\n{text}"}
-        ]
+            {"role": "system", "content": "You are a helpful translator. Translate exactly, preserving medical terminology."},
+            {"role": "user",   "content": f"Translate this to {target_language}:\n{text}"}
+        ],
     )
     return response.choices[0].message.content.strip()
 
-# --------------------- Endpoints ---------------------
+def build_brfss_context(p: HealthProfile) -> str:
+    """BRFSS prediction fields — used for both prediction and LLM context."""
+    return f"""
+BRFSS lifestyle and health profile:
+  Sex: {na(p.Sex)}  |  Age category: {na(p.AgeCategory)}
+  Education: {na(p.Education)}  |  Income: {na(p.Income)}
+  Employment: {na(p.EmploymentStatus)}  |  Marital status: {na(p.MaritalStatus)}
+  Home ownership: {na(p.HomeOwnership)}
+  General health: {na(p.GeneralHealth)}  |  Good or better health: {na(p.GoodOrBetterHealth)}
+  Last checkup: {na(p.LastCheckup)}
+  Height (BRFSS code): {na(p.Height)}  |  Weight (lbs): {na(p.Weight)}
+  Smoked 100+ cigarettes: {na(p.Smoked100Cigarettes)}  |  Smoker status: {na(p.SmokerStatus)}
+  E-cigarette use: {na(p.ECigaretteUsage)}  |  Smokeless tobacco: {na(p.SmokelessTobaccoUse)}
+  Alcohol days: {na(p.AlcoholDays)}  |  Physical activities: {na(p.PhysicalActivities)}
+  Angina: {na(p.HadAngina)}  |  Diabetes: {na(p.HadDiabetes)}
+  Kidney disease: {na(p.HadKidneyDisease)}  |  Stroke: {na(p.HadStroke)}
+  COPD: {na(p.HadCOPD)}  |  Depressive disorder: {na(p.HadDepressiveDisorder)}
+  Arthritis: {na(p.HadArthritis)}
+""".strip()
+
+def build_wearable_context(p: HealthProfile) -> str:
+    """Wearable and nutrition fields — extra context for LLM only."""
+    return f"""
+Wearable and nutrition data:
+  Avg HR: {na(p.avg_heart_rate)} bpm  |  Resting HR: {na(p.resting_heart_rate)} bpm
+  Sleep: {na(p.sleep_hours)} hrs/night  |  Respiratory rate: {na(p.respiratory_rate)}
+  Calories: {na(p.calories_per_day)}/day  |  Protein: {na(p.protein_g)}g
+  Carbs: {na(p.carbs_g)}g  |  Fat: {na(p.fat_g)}g  |  Water: {na(p.water_liters)}L
+  Height cm: {na(p.height_cm)}  |  Weight kg: {na(p.weight_kg)}
+  Job: {na(p.job)}  |  Symptoms: {na(p.symptoms)}
+""".strip()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ENDPOINTS
+# ══════════════════════════════════════════════════════════════════════════════
 
 @app.get("/debug-info")
 def debug_info():
-    import sys as _sys
     import sklearn as _sk
-    return {"python": _sys.version, "sklearn": _sk.__version__}
+    return {
+        "python":           sys.version,
+        "sklearn":          _sk.__version__,
+        "model":            "BRFSS-only model",
+        "model_path":       "artifact/model.pkl",
+        "preprocessor_path":"artifact/preprocessor.pkl",
+    }
+
 
 @app.post("/predict")
 def predict(profile: HealthProfile):
+    """
+    BRFSS-only clinical prediction.
+    Returns binary prediction AND probability for the risk adjuster.
+    """
     try:
         model_input = {
-            "age": profile.age,
-            "sex": sex_to_int(profile.sex),
-            "cp": safe_index(
-                profile.cp,
-                ["Typical Angina", "Atypical Angina", "Non-anginal", "Asymptomatic"]
-            ),
-            "trestbps": profile.trestbps,
-            "chol": profile.chol,
-            "fbs": yes_no_to_int(profile.fbs),
-            "restecg": safe_index(
-                profile.restecg,
-                ["Normal", "ST-T Abnormality", "Left Ventricular Hypertrophy"]
-            ),
-            "thalach": profile.thalach,
-            "exang": yes_no_to_int(profile.exang),
-            "oldpeak": profile.oldpeak,
-            "slope": safe_index(
-                profile.slope,
-                ["Upsloping", "Flat", "Downsloping"]
-            ),
-            "ca": profile.ca,
-            "thal": safe_index(
-                profile.thal,
-                ["Normal", "Fixed Defect", "Reversible Defect"]
-            ),
+            "Sex":                   profile.Sex,
+            "AgeCategory":           profile.AgeCategory,
+            "Education":             profile.Education,
+            "Income":                profile.Income,
+            "EmploymentStatus":      profile.EmploymentStatus,
+            "MaritalStatus":         profile.MaritalStatus,
+            "HomeOwnership":         profile.HomeOwnership,
+            "GeneralHealth":         profile.GeneralHealth,
+            "GoodOrBetterHealth":    profile.GoodOrBetterHealth,
+            "LastCheckup":           profile.LastCheckup,
+            "Height":                profile.Height,
+            "Weight":                profile.Weight,
+            "Smoked100Cigarettes":   profile.Smoked100Cigarettes,
+            "SmokerStatus":          profile.SmokerStatus,
+            "ECigaretteUsage":       profile.ECigaretteUsage,
+            "SmokelessTobaccoUse":   profile.SmokelessTobaccoUse,
+            "AlcoholDays":           profile.AlcoholDays,
+            "PhysicalActivities":    profile.PhysicalActivities,
+            "HadAngina":             profile.HadAngina,
+            "HadDiabetes":           profile.HadDiabetes,
+            "HadKidneyDisease":      profile.HadKidneyDisease,
+            "HadStroke":             profile.HadStroke,
+            "HadCOPD":               profile.HadCOPD,
+            "HadDepressiveDisorder": profile.HadDepressiveDisorder,
+            "HadArthritis":          profile.HadArthritis,
         }
 
-        pipeline = PredictPipeline()
-        prediction = pipeline.predict(model_input)
+        pipeline    = PredictPipeline()
+        prediction  = pipeline.predict(model_input)
+        probability = pipeline.predict_proba(model_input)
 
         return {
-            "prediction": int(prediction),
-            "risk": "High" if prediction == 1 else "Low"
+            "prediction":  int(prediction),
+            "probability": round(float(probability), 4),
+            "risk":        "High" if int(prediction) == 1 else "Low",
+            "message":     "BRFSS-only model estimate, not a medical diagnosis."
         }
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-
 @app.post("/diet-plan")
 def generate_diet_plan(profile: HealthProfile):
-    patient_context = build_patient_context(profile)
+    groq_client = require_groq_client()
+    brfss   = build_brfss_context(profile)
+    wearable = build_wearable_context(profile)
 
     prompt = f"""
-Create a personalized heart-healthy diet plan.
+You are a certified medical dietitian. Create a personalised heart-healthy diet plan.
 
-Original medical information:
-Age: {profile.age}
-Sex: {profile.sex}
-Blood pressure: {profile.trestbps}
-Cholesterol: {profile.chol}
-Fasting blood sugar over 120: {profile.fbs}
-Max heart rate: {profile.thalach}
-ST depression: {profile.oldpeak}
-Thalassemia: {profile.thal}
+{brfss}
 
-{patient_context}
+{wearable}
 
-If some information is missing, do not make up exact values.
-Use only the information provided.
-Include:
-1. Main nutrition goals
-2. Foods to eat
-3. Foods to limit
-4. One sample day of meals
-5. Lifestyle notes based on sleep, symptoms, job, and wearable data if available
+Instructions:
+- Tailor advice to their specific conditions (smoking, diabetes, COPD, depression, etc.)
+- If a field says "Not provided", do not fabricate a value.
+- Include:
+  1. Main nutrition goals based on their risk factors
+  2. Foods to eat (with reasons)
+  3. Foods to limit (with reasons)
+  4. One sample day of meals
+  5. Lifestyle notes based on activity, sleep, and symptoms if available
+- End with a reminder to consult a registered dietitian or doctor.
 """
-
-    response = client.chat.completions.create(
-        model="openai/gpt-oss-120b",
+    response = groq_client.chat.completions.create(
+        model=MODEL,
         messages=[
             {"role": "system", "content": "You are a certified medical dietitian. Give educational advice, not diagnosis."},
-            {"role": "user", "content": prompt}
+            {"role": "user",   "content": prompt},
         ],
-        max_tokens=800
+        max_tokens=1000,
     )
-
     return {"diet_plan": response.choices[0].message.content}
 
 
 @app.post("/risk-report")
 def risk_report(profile: HealthProfile, prediction: int, language: str = "English"):
-    patient_context = build_patient_context(profile)
+    groq_client = require_groq_client()
+    brfss = build_brfss_context(profile)
 
     prompt = f"""
-You are a cardiology assistant. Explain why the patient was predicted as {'high' if prediction else 'low'} risk.
+You are a cardiology assistant. Explain this heart disease risk result in clear, patient-friendly language.
 
-Original model information:
-Age: {profile.age}
-Sex: {profile.sex}
-Cholesterol: {profile.chol}
-Blood pressure: {profile.trestbps}
-Max heart rate: {profile.thalach}
-ST depression: {profile.oldpeak}
-Exercise-induced angina: {profile.exang}
-Thalassemia: {profile.thal}
+Model prediction: {"HIGH RISK" if prediction else "LOW RISK"}
 
-{patient_context}
+{brfss}
 
-Important:
-The ML prediction is based only on the original heart disease model fields.
-The wearable, nutrition, symptom, and basic information should be used only as extra context for explanation and recommendations.
-Do not claim the extra fields directly changed the ML prediction unless the model is retrained with those fields.
+Instructions:
+- This is a BRFSS-only model estimate, not a medical diagnosis.
+- Explain which specific factors (smoking, conditions, activity, age, etc.) are most influencing the result.
+- Distinguish between modifiable factors (smoking, activity) and non-modifiable ones (age, prior conditions).
+- Note any missing fields that would improve reliability.
+- End with a recommendation to consult a healthcare professional.
 """
-
-    response = client.chat.completions.create(
-        model="openai/gpt-oss-120b",
-        messages=[{"role": "user", "content": prompt}]
+    response = groq_client.chat.completions.create(
+        model=MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=800,
     )
-
     return {"risk_report": translate_text(response.choices[0].message.content.strip(), language)}
 
 
 @app.post("/lifestyle")
 def lifestyle_advice(profile: HealthProfile, language: str = "English"):
-    patient_context = build_patient_context(profile)
+    groq_client = require_groq_client()
+    brfss    = build_brfss_context(profile)
+    wearable = build_wearable_context(profile)
 
     prompt = f"""
-Give daily lifestyle advice for heart health.
+You are a preventive cardiologist. Give practical daily lifestyle advice for this patient.
 
-Original medical information:
-Age: {profile.age}
-Sex: {profile.sex}
-Blood pressure: {profile.trestbps}
-Cholesterol: {profile.chol}
-Max heart rate: {profile.thalach}
-ST depression: {profile.oldpeak}
+{brfss}
 
-{patient_context}
+{wearable}
 
-Use wearable data, nutrition data, symptoms, and basic information if provided.
-If some information is missing, say what extra information would help.
-Keep the advice practical and easy to follow.
+Instructions:
+- Tailor advice specifically to their conditions and lifestyle factors.
+- Cover: physical activity, smoking cessation (if applicable), alcohol, sleep, stress, diet.
+- If physical activity is "No" or 2.0, suggest a beginner-friendly exercise plan.
+- If they smoke, include a cessation recommendation.
+- Mention comorbidities (diabetes, COPD, depression, arthritis) where relevant.
+- Keep advice practical and easy to follow.
 """
-
-    response = client.chat.completions.create(
-        model="openai/gpt-oss-120b",
-        messages=[{"role": "user", "content": prompt}]
+    response = groq_client.chat.completions.create(
+        model=MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=800,
     )
-
     return {"lifestyle": translate_text(response.choices[0].message.content.strip(), language)}
 
 
 @app.post("/doctor-note")
 def doctor_note(profile: HealthProfile, prediction: int, language: str = "English"):
-    patient_context = build_patient_context(profile)
+    groq_client = require_groq_client()
+    brfss = build_brfss_context(profile)
 
     prompt = f"""
-Draft a doctor's summary note from the patient profile and risk status.
+Draft a professional doctor's summary note for this patient.
 
-Risk status: {"High" if prediction else "Low"}
+Risk status: {"HIGH RISK" if prediction else "LOW RISK"} (BRFSS model estimate)
 
-Original medical information:
-Age: {profile.age}
-Sex: {profile.sex}
-Blood pressure: {profile.trestbps}
-Cholesterol: {profile.chol}
-Max heart rate: {profile.thalach}
-ST depression: {profile.oldpeak}
-Exercise-induced angina: {profile.exang}
-Thalassemia: {profile.thal}
-Major vessels colored: {profile.ca}
+{brfss}
 
-{patient_context}
+Format:
+- Patient summary (age category, sex, key health indicators)
+- Key risk factors identified
+- Protective factors (if any)
+- Notable comorbidities
+- Missing information that would improve assessment
+- Recommended follow-up actions
+- Disclaimer: this is a screening tool, not a clinical diagnosis
 
-Write a clear summary note.
-Mention missing information if important.
-Do not diagnose. Recommend clinical follow-up if symptoms are concerning.
+Write in professional medical note style. Be concise and factual.
 """
-
-    response = client.chat.completions.create(
-        model="openai/gpt-oss-120b",
-        messages=[{"role": "user", "content": prompt}]
+    response = groq_client.chat.completions.create(
+        model=MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=800,
     )
-
     return {"doctor_note": translate_text(response.choices[0].message.content.strip(), language)}
+
 
 @app.post("/chat")
 def chatbot(request: ChatRequest):
-    messages = [
-        {"role": "system", "content": "You are Healthy(B), a multilingual diet and heart health expert."},
-        {"role": "user", "content": request.message}
-    ]
-    response = client.chat.completions.create(model="openai/gpt-oss-120b", messages=messages, max_tokens=300)
+    """
+    Profile-aware chatbot. Streamlit injects the user's profile summary
+    and latest risk result into request.message as context.
+    """
+    groq_client = require_groq_client()
+    response = groq_client.chat.completions.create(
+        model=MODEL,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You are Healthy(B), a knowledgeable and empathetic heart health and diet assistant. "
+                    "You speak clearly to non-medical users. "
+                    "You never diagnose — you educate and recommend professional consultation. "
+                    "If patient context is provided at the start of the message, use it to personalise your response."
+                )
+            },
+            {"role": "user", "content": request.message},
+        ],
+        max_tokens=400,
+    )
     reply = response.choices[0].message.content
     return {"reply": translate_text(reply, request.language)}
 
 
 if __name__ == "__main__":
-    # local dev: run with `python main.py`
     import uvicorn
     uvicorn.run("app:app", host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))

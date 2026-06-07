@@ -1,0 +1,360 @@
+Millen Pipeline Baseline vs Tuned Evaluation
+================================================================================
+
+Dataset used by Millen training pipeline:
+notebook/data/cleaned_data.csv
+
+Important note:
+This cleaned clinical dataset is small and very balanced in the test split.
+In this run, class 0 and class 1 have almost the same support, so baseline scores are already high.
+This is different from the larger BRFSS dataset, which is more imbalanced.
+
+Class labels:
+Class 0 = No Heart Disease
+Class 1 = Had Heart Disease
+
+Model selection rule:
+The final tuned model is selected by highest tuned accuracy, following Millen's original pipeline logic.
+
+All Model Results
+--------------------------------------------------------------------------------
+              model  version  accuracy  precision_class_0  recall_class_0  f1_class_0  support_class_0  precision_class_1  recall_class_1  f1_class_1  support_class_1                                      best_params
+      Random Forest Baseline  0.985366           0.971429        1.000000    0.985507              102           1.000000        0.970874    0.985222              103                               Default parameters
+      Random Forest    Tuned  0.985366           0.971429        1.000000    0.985507              102           1.000000        0.970874    0.985222              103 {'class_weight': 'balanced', 'n_estimators': 40}
+      Decision Tree Baseline  0.985366           0.971429        1.000000    0.985507              102           1.000000        0.970874    0.985222              103                               Default parameters
+      Decision Tree    Tuned  0.985366           0.971429        1.000000    0.985507              102           1.000000        0.970874    0.985222              103                            {'criterion': 'gini'}
+  Gradient Boosting Baseline  0.931707           0.948980        0.911765    0.930000              102           0.915888        0.951456    0.933333              103                               Default parameters
+  Gradient Boosting    Tuned  0.985366           0.971429        1.000000    0.985507              102           1.000000        0.970874    0.985222              103                            {'n_estimators': 300}
+            XGBoost Baseline  0.985366           0.971429        1.000000    0.985507              102           1.000000        0.970874    0.985222              103                               Default parameters
+            XGBoost    Tuned  0.985366           0.971429        1.000000    0.985507              102           1.000000        0.970874    0.985222              103                           {'learning_rate': 0.2}
+           CatBoost Baseline  0.985366           0.971429        1.000000    0.985507              102           1.000000        0.970874    0.985222              103                               Default parameters
+           CatBoost    Tuned  0.985366           0.971429        1.000000    0.985507              102           1.000000        0.970874    0.985222              103                          {'learning_rate': 0.01}
+         KNeighbors Baseline  0.834146           0.877778        0.774510    0.822917              102           0.800000        0.893204    0.844037              103                               Default parameters
+         KNeighbors    Tuned  0.936585           0.949495        0.921569    0.935323              102           0.924528        0.951456    0.937799              103                               {'n_neighbors': 3}
+           AdaBoost Baseline  0.814634           0.840426        0.774510    0.806122              102           0.792793        0.854369    0.822430              103                               Default parameters
+           AdaBoost    Tuned  0.873171           0.887755        0.852941    0.870000              102           0.859813        0.893204    0.876190              103                            {'n_estimators': 250}
+Logistic Regression Baseline  0.795122           0.848837        0.715686    0.776596              102           0.756303        0.873786    0.810811              103                               Default parameters
+Logistic Regression    Tuned  0.795122           0.848837        0.715686    0.776596              102           0.756303        0.873786    0.810811              103                                               {}
+
+Tuned Model Ranking by Accuracy
+--------------------------------------------------------------------------------
+Random Forest: 0.9854
+Decision Tree: 0.9854
+Gradient Boosting: 0.9854
+XGBoost: 0.9854
+CatBoost: 0.9854
+KNeighbors: 0.9366
+AdaBoost: 0.8732
+Logistic Regression: 0.7951
+
+Best/Worst Summary
+--------------------------------------------------------------------------------
+Best baseline: Random Forest | Accuracy: 0.9854
+Worst baseline: Logistic Regression | Accuracy: 0.7951
+Best tuned: Random Forest | Accuracy: 0.9854
+Worst tuned: Logistic Regression | Accuracy: 0.7951
+
+Final selected tuned model: Random Forest
+Best parameters: {'class_weight': 'balanced', 'n_estimators': 40}
+Best tuned model confusion matrix:
+[[102   0]
+ [  3 100]]
+
+Detailed Class Reports
+================================================================================
+
+================================================================================
+Baseline Random Forest
+--------------------------------------------------------------------------------
+Accuracy: 0.9854
+
+                   precision    recall  f1-score   support
+
+ No Heart Disease       0.97      1.00      0.99       102
+Had Heart Disease       1.00      0.97      0.99       103
+
+         accuracy                           0.99       205
+        macro avg       0.99      0.99      0.99       205
+     weighted avg       0.99      0.99      0.99       205
+
+Confusion matrix:
+[[102   0]
+ [  3 100]]
+
+================================================================================
+Tuned Random Forest
+--------------------------------------------------------------------------------
+Best parameters: {'class_weight': 'balanced', 'n_estimators': 40}
+Accuracy: 0.9854
+
+                   precision    recall  f1-score   support
+
+ No Heart Disease       0.97      1.00      0.99       102
+Had Heart Disease       1.00      0.97      0.99       103
+
+         accuracy                           0.99       205
+        macro avg       0.99      0.99      0.99       205
+     weighted avg       0.99      0.99      0.99       205
+
+Confusion matrix:
+[[102   0]
+ [  3 100]]
+
+================================================================================
+Baseline Decision Tree
+--------------------------------------------------------------------------------
+Accuracy: 0.9854
+
+                   precision    recall  f1-score   support
+
+ No Heart Disease       0.97      1.00      0.99       102
+Had Heart Disease       1.00      0.97      0.99       103
+
+         accuracy                           0.99       205
+        macro avg       0.99      0.99      0.99       205
+     weighted avg       0.99      0.99      0.99       205
+
+Confusion matrix:
+[[102   0]
+ [  3 100]]
+
+================================================================================
+Tuned Decision Tree
+--------------------------------------------------------------------------------
+Best parameters: {'criterion': 'gini'}
+Accuracy: 0.9854
+
+                   precision    recall  f1-score   support
+
+ No Heart Disease       0.97      1.00      0.99       102
+Had Heart Disease       1.00      0.97      0.99       103
+
+         accuracy                           0.99       205
+        macro avg       0.99      0.99      0.99       205
+     weighted avg       0.99      0.99      0.99       205
+
+Confusion matrix:
+[[102   0]
+ [  3 100]]
+
+================================================================================
+Baseline Gradient Boosting
+--------------------------------------------------------------------------------
+Accuracy: 0.9317
+
+                   precision    recall  f1-score   support
+
+ No Heart Disease       0.95      0.91      0.93       102
+Had Heart Disease       0.92      0.95      0.93       103
+
+         accuracy                           0.93       205
+        macro avg       0.93      0.93      0.93       205
+     weighted avg       0.93      0.93      0.93       205
+
+Confusion matrix:
+[[93  9]
+ [ 5 98]]
+
+================================================================================
+Tuned Gradient Boosting
+--------------------------------------------------------------------------------
+Best parameters: {'n_estimators': 300}
+Accuracy: 0.9854
+
+                   precision    recall  f1-score   support
+
+ No Heart Disease       0.97      1.00      0.99       102
+Had Heart Disease       1.00      0.97      0.99       103
+
+         accuracy                           0.99       205
+        macro avg       0.99      0.99      0.99       205
+     weighted avg       0.99      0.99      0.99       205
+
+Confusion matrix:
+[[102   0]
+ [  3 100]]
+
+================================================================================
+Baseline XGBoost
+--------------------------------------------------------------------------------
+Accuracy: 0.9854
+
+                   precision    recall  f1-score   support
+
+ No Heart Disease       0.97      1.00      0.99       102
+Had Heart Disease       1.00      0.97      0.99       103
+
+         accuracy                           0.99       205
+        macro avg       0.99      0.99      0.99       205
+     weighted avg       0.99      0.99      0.99       205
+
+Confusion matrix:
+[[102   0]
+ [  3 100]]
+
+================================================================================
+Tuned XGBoost
+--------------------------------------------------------------------------------
+Best parameters: {'learning_rate': 0.2}
+Accuracy: 0.9854
+
+                   precision    recall  f1-score   support
+
+ No Heart Disease       0.97      1.00      0.99       102
+Had Heart Disease       1.00      0.97      0.99       103
+
+         accuracy                           0.99       205
+        macro avg       0.99      0.99      0.99       205
+     weighted avg       0.99      0.99      0.99       205
+
+Confusion matrix:
+[[102   0]
+ [  3 100]]
+
+================================================================================
+Baseline CatBoost
+--------------------------------------------------------------------------------
+Accuracy: 0.9854
+
+                   precision    recall  f1-score   support
+
+ No Heart Disease       0.97      1.00      0.99       102
+Had Heart Disease       1.00      0.97      0.99       103
+
+         accuracy                           0.99       205
+        macro avg       0.99      0.99      0.99       205
+     weighted avg       0.99      0.99      0.99       205
+
+Confusion matrix:
+[[102   0]
+ [  3 100]]
+
+================================================================================
+Tuned CatBoost
+--------------------------------------------------------------------------------
+Best parameters: {'learning_rate': 0.01}
+Accuracy: 0.9854
+
+                   precision    recall  f1-score   support
+
+ No Heart Disease       0.97      1.00      0.99       102
+Had Heart Disease       1.00      0.97      0.99       103
+
+         accuracy                           0.99       205
+        macro avg       0.99      0.99      0.99       205
+     weighted avg       0.99      0.99      0.99       205
+
+Confusion matrix:
+[[102   0]
+ [  3 100]]
+
+================================================================================
+Baseline KNeighbors
+--------------------------------------------------------------------------------
+Accuracy: 0.8341
+
+                   precision    recall  f1-score   support
+
+ No Heart Disease       0.88      0.77      0.82       102
+Had Heart Disease       0.80      0.89      0.84       103
+
+         accuracy                           0.83       205
+        macro avg       0.84      0.83      0.83       205
+     weighted avg       0.84      0.83      0.83       205
+
+Confusion matrix:
+[[79 23]
+ [11 92]]
+
+================================================================================
+Tuned KNeighbors
+--------------------------------------------------------------------------------
+Best parameters: {'n_neighbors': 3}
+Accuracy: 0.9366
+
+                   precision    recall  f1-score   support
+
+ No Heart Disease       0.95      0.92      0.94       102
+Had Heart Disease       0.92      0.95      0.94       103
+
+         accuracy                           0.94       205
+        macro avg       0.94      0.94      0.94       205
+     weighted avg       0.94      0.94      0.94       205
+
+Confusion matrix:
+[[94  8]
+ [ 5 98]]
+
+================================================================================
+Baseline AdaBoost
+--------------------------------------------------------------------------------
+Accuracy: 0.8146
+
+                   precision    recall  f1-score   support
+
+ No Heart Disease       0.84      0.77      0.81       102
+Had Heart Disease       0.79      0.85      0.82       103
+
+         accuracy                           0.81       205
+        macro avg       0.82      0.81      0.81       205
+     weighted avg       0.82      0.81      0.81       205
+
+Confusion matrix:
+[[79 23]
+ [15 88]]
+
+================================================================================
+Tuned AdaBoost
+--------------------------------------------------------------------------------
+Best parameters: {'n_estimators': 250}
+Accuracy: 0.8732
+
+                   precision    recall  f1-score   support
+
+ No Heart Disease       0.89      0.85      0.87       102
+Had Heart Disease       0.86      0.89      0.88       103
+
+         accuracy                           0.87       205
+        macro avg       0.87      0.87      0.87       205
+     weighted avg       0.87      0.87      0.87       205
+
+Confusion matrix:
+[[87 15]
+ [11 92]]
+
+================================================================================
+Baseline Logistic Regression
+--------------------------------------------------------------------------------
+Accuracy: 0.7951
+
+                   precision    recall  f1-score   support
+
+ No Heart Disease       0.85      0.72      0.78       102
+Had Heart Disease       0.76      0.87      0.81       103
+
+         accuracy                           0.80       205
+        macro avg       0.80      0.79      0.79       205
+     weighted avg       0.80      0.80      0.79       205
+
+Confusion matrix:
+[[73 29]
+ [13 90]]
+
+================================================================================
+Tuned Logistic Regression
+--------------------------------------------------------------------------------
+Best parameters: {}
+Accuracy: 0.7951
+
+                   precision    recall  f1-score   support
+
+ No Heart Disease       0.85      0.72      0.78       102
+Had Heart Disease       0.76      0.87      0.81       103
+
+         accuracy                           0.80       205
+        macro avg       0.80      0.79      0.79       205
+     weighted avg       0.80      0.80      0.79       205
+
+Confusion matrix:
+[[73 29]
+ [13 90]]

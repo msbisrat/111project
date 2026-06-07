@@ -6,6 +6,9 @@ pandas
 scikit-learn==1.6.1
 python-dotenv
 pydantic
+mlflow-skinny
+xgboost
+catboost
 requests
 groq
 fpdf

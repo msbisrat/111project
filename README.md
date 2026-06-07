@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <strong>A Streamlit + FastAPI healthcare prototype for BRFSS-based heart disease risk prediction and AI-powered diet, lifestyle, risk report, and doctor note support.</strong>
+  <strong>A full-stack AI-powered healthcare application for heart disease prediction and personalized diet & lifestyle guidance.</strong>
 </p>
 
 <p align="center">
@@ -21,9 +21,64 @@
 </p>
 
 ---
+## Running millen-dev
 
+### Prerequisites
+Make sure you have the following installed:
+- Python 3.9+
+- pip
+
+### Setup
+
+1. **Clone the repository and switch to the branch**
+```bash
+   git clone https://github.com/msbisrat/111project.git
+   cd 111project
+   git checkout millen-dev
+```
+
+2. **Create and activate a virtual environment**
+```bash
+   python -m venv .venv
+   source .venv/bin/activate        # Mac/Linux
+   .venv\Scripts\activate           # Windows
+```
+
+3. **Install dependencies**
+```bash
+   pip install -r requirements.txt
+```
+
+4. **Add your Groq API key**
+
+   Get a free key at [console.groq.com](https://console.groq.com)
+   Create a `.env` file in the project root: Write GROQ_API_KEY=your_key_here
+
+5. **Download the data files**
+
+   Download the following file from [Shared Drive](https://drive.google.com/drive/folders/1Do-WD_58u01GXPyg8ScpCBZtyY61Kdw6?usp=sharing) and place them in the project root:
+   - `brfss_survey_data_processed.csv`
+
+6. **Run the training pipeline** (generates `artifact/model.pkl` and `artifact/preprocessor.pkl`)
+```bash
+   python src/mlproject/pipelines/training_pipelines.py
+```
+
+7. **Launch the app**
+```bash
+   streamlit run streamlit_app.py
+```
+   The FastAPI backend starts automatically in the background.
+
+### Notes
+- User profiles are saved locally in `profiles/` and are not committed to the repo.
+- Do not commit `.env` or any `.csv` files.
+---
 ## 🎯 Overview
 
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/b70c4e38-0ab6-4368-a248-348351cab3db" width="900" />
+</p>
 
 This project is a production-style **Streamlit web application** that predicts heart disease risk using machine learning models and enhances the experience with **AI-powered diet, lifestyle, and medical recommendations**.
 
@@ -34,79 +89,26 @@ It combines:
 * Generative AI for personalized healthcare guidance
 * A clean, interactive Streamlit frontend
 
-Built during **May–June**, with focus on real-world usability and deployment readiness.
-
-## What We Updated
-
-This project is based on an existing heart disease prediction and AI diet assistant application. The original version already included a Streamlit/FastAPI app, machine learning prediction pipeline, and AI-generated diet/lifestyle support features.
-
-Our update focuses on **Option B**, which fully retrains the prediction model using BRFSS features only. The updated model no longer depends on hard-to-answer UCI clinical fields such as thalassemia, ECG results, major vessels, ST depression, max heart rate, cholesterol, or chest pain type.
-
-Main updates:
-
-- Added `train_brfss_option_b.py` for BRFSS-only model training.
-- Updated `app.py` and `streamlit_app.py` to use BRFSS-style prediction inputs.
-- Retrained the prediction model using BRFSS features only.
-- Compared Logistic Regression, Decision Tree, Random Forest, and Gradient Boosting.
-- Selected Random Forest based on validation F1-score for the heart disease class.
-- Added/updated a local username-based save/load profile feature.
-- Kept AI-generated diet plan, risk report, lifestyle advice, doctor note, and chatbot support.
+Built during **May–July**, with focus on real-world usability and deployment readiness.
 
 ---
 
 ## ✨ Key Features
 
-### 🔍 BRFSS-Only Heart Disease Risk Prediction
+### 🔍 Heart Disease Risk Prediction
 
-The updated version predicts heart disease risk using BRFSS survey-style features instead of old UCI clinical fields.
+* Predicts likelihood of heart disease using medical attributes:
+  age, cholesterol, blood pressure, chest pain type, ECG results, and more.
+* Trained and evaluated multiple models:
 
-The model predicts:
+  * Random Forest
+  * XGBoost
+  * CatBoost
+* MLflow used for:
 
-`HadHeartDisease`
-
-using features such as:
-
-- Age category
-- Sex
-- Education
-- Income
-- Employment status
-- General health
-- Height and weight
-- Smoking history
-- Alcohol use
-- Physical activity
-- Diabetes
-- Stroke
-- COPD
-- Kidney disease
-- Depressive disorder
-- Arthritis
-
-Models compared:
-
-- Logistic Regression
-- Decision Tree
-- Random Forest: Random Forest was selected because it had the best validation F1-score for the heart disease class.
-- Gradient Boosting
-
-  
-### Model Evaluation
-
-The dataset was split into:
-
-- 60% training
-- 20% validation
-- 20% testing
-
-Final test results for the selected Random Forest model:
-
-- Accuracy: about 0.74
-- Recall for heart disease class: about 0.78
-- F1-score for heart disease class: about 0.36
-- ROC AUC: about 0.837
-
-Because the BRFSS dataset is imbalanced, accuracy alone is not enough. We prioritized recall and F1-score for the positive heart disease class because detecting possible heart disease cases is important for a screening-style prototype.
+  * Experiment tracking
+  * Model comparison
+  * Model registry
 
 ### 📊 Data & Insights
 
@@ -159,156 +161,67 @@ Because the BRFSS dataset is imbalanced, accuracy alone is not enough. We priori
 * Environment variables managed with **dotenv**
 * Sensitive credentials never hard-coded.
 
-
-### 💾 Save / Load Profile
-
-The app includes a local username-based save/load feature.
-
-Saved profiles are stored locally in:
-
-`saved_profiles.json`
-
-This saves user profile inputs only. Generated diet plans, reports, lifestyle suggestions, and doctor notes are not saved.
-
-This is for local demo purposes only and does not include secure login, encryption, or database storage.
-
 ---
-
-
 
 ## 🏗️ Architecture
 
-```text
-User Input through Streamlit
-        ↓
-BRFSS Feature Collection
-        ↓
-Preprocessor
-        ↓
-BRFSS-Only ML Model
-        ↓
-Heart Disease Risk Prediction
-        ↓
-Groq AI Layer
-        ↓
-Diet Plan | Risk Report | Lifestyle Advice | Doctor Note | Chatbot
 ```
+User Input (Streamlit UI)
+        ↓
+Data Preprocessing & Validation
+        ↓
+ML Models (RF / XGBoost / CatBoost)
+        ↓
+Prediction Output + Risk Score
+        ↓
+AI Layer (LangChain + Groq LLaMA 3)
+        ↓
+Diet Plan | Lifestyle Advice | Chatbot | PDF Report
+```
+
+MLflow runs alongside the pipeline to track metrics, parameters, and models.
 
 ---
 
 ## 🛠️ Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Language | Python |
-| Frontend | Streamlit |
-| Backend | FastAPI |
-| ML Models | Scikit-learn |
-| Data Processing | Pandas, NumPy |
-| Model Evaluation | Accuracy, Precision, Recall, F1-score, ROC AUC |
-| GenAI | Groq API |
-| Config Management | python-dotenv |
-| Local Profile Storage | JSON |
+| Layer               | Technology                      |
+| ------------------- | ------------------------------- |
+| Language            | Python 3.9+                     |
+| Frontend            | Streamlit                       |
+| ML Models           | Scikit-learn, XGBoost, CatBoost |
+| Experiment Tracking | MLflow                          |
+| Visualization       | Matplotlib, Plotly              |
+| GenAI               | LangChain + Groq LLaMA 3 (70B)  |
+| Database            | MySQL                           |
+| PDF Export          | FPDF                            |
+| Config Management   | python-dotenv                   |
+| Deployment          | Heroku                          |
 
 ---
 
 ## 🚀 Quick Start
 
-### 1. Clone the repository
+### Prerequisites
+
+* Python 3.9+
+* MySQL
+* Groq API key
+
+### Installation
 
 ```bash
-git clone <your-repo-link>
-cd 111project-main
-```
-### 2. Create and activate a virtual environment
+# Clone the repository
+git clone https://github.com/your-username/heart-disease-ai.git
+cd heart-disease-ai
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-```
+# Create virtual environment
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
 
-For Windows:
-
-```bash
-.venv\Scripts\activate
-```
-
-### 3. Install dependencies
-
-```bash
+# Install dependencies
 pip install -r requirements.txt
-pip install streamlit fastapi uvicorn python-dotenv requests scikit-learn pandas numpy
 ```
-
-### 4. Create a `.env` file
-
-Create a `.env` file in the project root folder:
-
-```text
-GROQ_API_KEY=your_groq_api_key_here
-```
-
-Do not upload `.env` to GitHub because it contains private API credentials.
-
-### 5. Add the processed BRFSS CSV
-
-Place the processed BRFSS CSV file in the project root folder:
-
-```text
-brfss_2024_eda_processed.csv
-```
-
-The BRFSS-only training script uses this file to train the updated prediction model.
-
-### 6. Train the BRFSS-only model
-
-Run:
-
-```bash
-python3 train_brfss_option_b.py
-```
-
-This will train and compare multiple models, then save the selected model and evaluation outputs.
-
-Generated files:
-
-```text
-artifacts/model.pkl
-artifact/preprocessor.pkl
-artifacts/brfss_model_comparison.csv
-artifacts/brfss_test_classification_report.txt
-```
-
-### 7. Run the backend
-
-In one terminal, run:
-
-```bash
-uvicorn app:app --reload
-```
-
-Wait until you see:
-
-```text
-Application startup complete.
-```
-
-### 8. Run the frontend
-
-Open a second terminal, activate the virtual environment again, and run:
-
-```bash
-source .venv/bin/activate
-streamlit run streamlit_app.py
-```
-
-Then open:
-
-```text
-http://localhost:8501
-```
-
----
 
 ### Environment Variables
 
@@ -332,13 +245,17 @@ streamlit run app.py
 
 ## 📸 Screenshots
 
-### Diet Plan
+### Heart Disease Predictor
 
-![Diet Plan](screenshots/diet%20plan.png)
+![Predictor](https://github.com/user-attachments/assets/b70c4e38-0ab6-4368-a248-348351cab3db)
 
-### App Screenshot
+### Personalized Diet Plan
 
-![App Screenshot](screenshots/ecs111.png)
+![Diet](https://github.com/user-attachments/assets/eef71d7a-f9a0-411e-8cf4-84407374ebe1)
+
+### AI Diet Assistant Chatbot
+
+![Chatbot](https://github.com/user-attachments/assets/3d2d62d0-7ee2-4004-85d0-748feac111f6)
 
 ---
 
@@ -350,28 +267,15 @@ streamlit run app.py
 
 ---
 
-## 🔮 Future Improvements
+## 🔮 Future Enhancements
 
-Possible future improvements include:
-
-- Full hyperparameter tuning with grid search or randomized search
-- Better class imbalance handling
-- Threshold tuning to balance precision and recall
-- More model explainability for BRFSS features
-- Secure database storage for saved profiles
-- User authentication for saved health profiles
-- User consent before sending saved profile data to the chatbot
-- Improved mobile-friendly UI
-- Expanded multilingual support
-- More detailed medical disclaimer and safety guidance
+* Medical report explanation with citations
+* Wearable device data integration
+* Doctor dashboard for patient monitoring
+* Mobile-friendly UI improvements
+* Expanded multilingual support
 
 ---
-
-## ⚠️ Disclaimer
-
-This application is a student project and prototype. The heart disease prediction is a machine learning estimate based on BRFSS survey-style features and should not be used as a medical diagnosis.
-
-The AI-generated diet plans, risk reports, lifestyle suggestions, doctor notes, and chatbot responses are for educational and informational purposes only. Users should consult a licensed healthcare professional for medical advice, diagnosis, or treatment.
 
 ## 👨‍💻 Author
 
