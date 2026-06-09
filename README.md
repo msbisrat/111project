@@ -5,7 +5,7 @@ A machine learning health application that estimates heart disease risk from BRF
 > **Medical disclaimer:** This project is for educational use only. It does not diagnose disease, replace a clinician, or provide emergency medical care.
 
 ---
-## Project Summary
+## 📝 Project Summary
 
 This project focuses on predicting whether a user is likely to be in the heart disease risk class using BRFSS survey-derived features. The model was trained on `brfss_2024_eda_processed.csv`, with `HadHeartDisease` as the target variable.
 
@@ -19,7 +19,7 @@ The project combines:
 
 ---
 
-## Running the App
+##  🏃 Running the App
 
 ### Prerequisites
 Make sure you have the following installed:
@@ -66,8 +66,6 @@ Make sure you have the following installed:
 - Do not commit `.env` or any `.csv` files.
   
 ---
-
-## 🎯 Overview
 
 ## 📊 Data
 
@@ -119,7 +117,7 @@ The project presentation describes the system as a two-stage architecture: a cli
 ![Two-stage pipeline](docs/pipeline_architecture.png)
 ```
 
-![Two-stage pipeline](docs/pipeline_architecture.png)
+![Two-stage pipeline](pipeline_architecture.png)
 
 ### Current code architecture
 
